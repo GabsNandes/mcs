@@ -8,6 +8,10 @@ def clean_sinan_dataset(sinan_df, cnes_df):
     sinan_df['avg_sat'] = np.nan
     sinan_df['max_sat'] = np.nan
     sinan_df['min_sat'] = np.nan
+
+    sinan_df['avg_ws'] = np.nan
+    sinan_df['max_ws'] = np.nan
+    sinan_df['min_ws'] = np.nan    
     
     sinan_df['ID_UNIDADE'] = sinan_df['ID_UNIDADE'].str.strip()
     
@@ -20,7 +24,7 @@ def clean_sinan_dataset(sinan_df, cnes_df):
 
 def build_dataset():
     sinan_path = 'data/processed/sinan/DENGBR23.parquet'
-    cnes_path = 'data/processed/cnes/STRJ2311.parquet'
+    cnes_path = 'data/processed/cnes/STRJ2401.parquet'
     lst_reference_file = "data/raw/lst/20230116/OR_ABI-L2-LSTF-M6_G16_s20230152100206_e20230152109514_c20230152111229.nc"
     output_path = 'data/processed/sinan/sinan.parquet'
 
@@ -54,9 +58,9 @@ def build_dataset():
         lst_datasets_path = 'data/processed/lst'
         lst_data = np.load(f'{lst_datasets_path}/{dt_notific}.npz')
 
-        sinan_df.at[index, 'avg'] = lst_data['avg'][lst_x, lst_y].round(2)
-        sinan_df.at[index, 'max'] = lst_data['max'][lst_x, lst_y].round(2)
-        sinan_df.at[index, 'min'] = lst_data['min'][lst_x, lst_y].round(2)
+        sinan_df.at[index, 'avg_sat'] = lst_data['avg'][lst_x, lst_y].round(2)
+        sinan_df.at[index, 'max_sat'] = lst_data['max'][lst_x, lst_y].round(2)
+        sinan_df.at[index, 'min_sat'] = lst_data['min'][lst_x, lst_y].round(2)
 
     sinan_df.to_parquet(output_path)
 

@@ -8,7 +8,7 @@ import os
 
 def download_rrqpe_data(date, path):
     product = "ABI-L2-RRQPEF"
-    os.makedirs(path, exist_ok=True)  # Ensure output directory exists
+    os.makedirs(path, exist_ok=True)
     for hour in np.arange(0,24-3,1):
         yyyymmddhhmn = f"{date}{hour:02.0f}00"
         file_name = download_goes_prod(yyyymmddhhmn, product, path)    
