@@ -180,7 +180,7 @@ def process_file(file_path):
     # Get the pixel values
     reprojected_data = reprojected_file.variables['Band1'][:]
 
-    reprojected_data = iterative_dilation(reprojected_data, 3)
+    #reprojected_data = iterative_dilation(reprojected_data, 3)
 
     #-----------------------------------------------------------------------------------------------------------
     # Choose the plot size (width x height, in inches)
@@ -194,6 +194,7 @@ def process_file(file_path):
 
     # Plot the image
     colors = ['white', 'red', 'orange', 'yellow']
+    colors = ['white', "black"]
     cmap = ListedColormap(colors)
     img = ax.imshow(reprojected_data, cmap=cmap, origin='upper', extent=img_extent)
 
@@ -201,8 +202,8 @@ def process_file(file_path):
     ax.coastlines(resolution='10m', color='black', linewidth=0.8)
     ax.add_feature(cartopy.feature.BORDERS, edgecolor='black', linewidth=0.5)
 
-    shapefile = list(shpreader.Reader('data/shapes/BR_UF_2019.shp').geometries())
-    ax.add_geometries(shapefile, ccrs.PlateCarree(), edgecolor='black',facecolor='none', linewidth=0.3)
+    ax.coastlines(resolution='10m', color='black', linewidth=0.8)
+    ax.add_feature(cartopy.feature.STATES, edgecolor='black', linewidth=0.5)
 
     gl = ax.gridlines(crs=ccrs.PlateCarree(), color='gray', alpha=1.0, linestyle='--', linewidth=0.25, xlocs=np.arange(-180, 180, 5), ylocs=np.arange(-90, 90, 5), draw_labels=True)
     gl.top_labels = False

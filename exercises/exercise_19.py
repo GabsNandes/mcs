@@ -1,5 +1,7 @@
 # Find an extent of a target size
 
+# Globals
+#-----------------------------------------------------------------------------------------------------------
 import importlib.util
 import os
 import sys
@@ -28,10 +30,14 @@ reproject = dynamic_import("utils.reproject_nc_file", "reproject")
 from osgeo import gdal
 from netCDF4 import Dataset
 gdal.PushErrorHandler('CPLQuietErrorHandler')
+#-----------------------------------------------------------------------------------------------------------
+
+# Iterate until target shape is met
+#-----------------------------------------------------------------------------------------------------------
 
 # Initial extent and target shape for Rio de Janeiro
 loni, lonf, lati, latf = -50.60, -22.60, -44.00, -16.00
-#loni, lonf, lati, latf = -44.98, -23.79, -40.92, -20.27
+loni, lonf, lati, latf = -44.98, -23.79, -40.92, -20.27
 extent = [loni, lonf, lati, latf]
 t_x = 64 
 t_y = 64
@@ -47,9 +53,7 @@ lst_variables = gdal.Open(f'NETCDF:{helper_file_path}:LST')
 metadata = lst_variables.GetMetadata()
 undef = float(metadata.get('LST#_FillValue'))
 array = Dataset(helper_file_path)['LST'][:]
-
-# Iterate until target shape is met
-target_met = False
+target_met = True
 while not target_met:
     reproject('output.nc', lst_variables, array, extent, undef)
 
@@ -66,12 +70,25 @@ while not target_met:
                 if reprojected_shape[0] != t_y:
                     extent[1] -= lon_increment  # Adjust the north boundary               
 
+reproject('output.nc', lst_variables, array, extent, undef)
 print(f'Extent found: {extent}')
 
+#-----------------------------------------------------------------------------------------------------------
+
+# Plot figure
+#-----------------------------------------------------------------------------------------------------------
 file = Dataset('output.nc')
 data = file.variables['Band1'][:]
-#-----------------------------------------------------------------------------------------------------------
-# Choose the plot size (width x height, in inches)
+data = np.full(data.shape, np.nan)
+
+
+porcentagem = 0.1
+num_valores = int(data.size * porcentagem)
+indices = np.random.choice(data.size, num_valores, replace=False)
+rows, cols = np.unravel_index(indices, data.shape)
+data[rows, cols] = -np.inf
+mask_inf = data == -np.inf
+
 plt.figure(figsize=(10,10))
 
 # Use the Geostationary projection in cartopy
@@ -81,7 +98,9 @@ ax = plt.axes(projection=ccrs.PlateCarree())
 img_extent = [extent[0], extent[2], extent[1], extent[3]]
 
 # Plot the image
-img = ax.imshow(data, cmap='jet', origin='upper', extent=img_extent)
+#img = ax.imshow(data, cmap='jet', origin='upper', extent=img_extent)
+img = ax.imshow(np.ma.masked_where(mask_inf, data), cmap='jet', origin='upper', extent=img_extent)
+#ax.imshow(np.ma.masked_where(~mask_inf, mask_inf), cmap='gray', origin='upper', alpha=1, extent=img_extent)
 
 # Add coastlines, borders and gridlines
 ax.coastlines(resolution='10m', color='black', linewidth=0.8)
@@ -93,9 +112,11 @@ gl.right_labels = False
 
 plt.xlim(extent[0], extent[2])
 plt.ylim(extent[1], extent[3])
+plt.tight_layout()
 
 # Add a title
 plt.title('Reg.: ' + str(extent) , fontsize=10, loc='right')
 #-----------------------------------------------------------------------------------------------------------
+
 # Show the image
 plt.show()

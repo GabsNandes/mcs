@@ -1,16 +1,14 @@
 @echo off
 
-:: Activate env
-::conda.bat activate env
-
 :: Download and process CNES Health Units data - OK
 ::python src/utils/download_cnes_file.py ST RJ 2401 data/raw/cnes/STRJ2401.dbc
 ::python src/utils/dbc_to_parquet.py data/raw/cnes/STRJ2401.dbc data/raw/cnes/STRJ2401.parquet
 ::python src/process_cnes_dataset.py data/raw/cnes/STRJ2401.parquet data/processed/cnes/STRJ2401.parquet
 
 :: Download and process SINAN dengue cases - OK
-python src/utils/download_sinan_file.py DENG 2023 data/raw/sinan
-python src/extract_sinan_cases.py data/raw/sinan/DENGBR23.parquet data/processed/sinan/DENGBR23.parquet --cod_uf 33
+::python src/utils/download_sinan_file.py DENG 2023 data/raw/sinan
+::python src/unify_sinan.py data/raw/sinan data/processed/sinan
+::python src/extract_sinan_cases.py data/processed/sinan/concat.parquet data/processed/sinan/DENG.parquet --cod_uf 33
 
 :: Download inmet data - OK
 ::python src/utils/download_inmet_data.py -s A617 -b 2023 -e 2023 -o data/raw/inmet --api_token %INMET_API_TOKEN%
@@ -55,11 +53,11 @@ python src/extract_sinan_cases.py data/raw/sinan/DENGBR23.parquet data/processed
 ::python src/utils/download_inmet_data.py -s A634 -b 2023 -e 2023 -o data/raw/inmet --api_token %INMET_API_TOKEN%
 ::python src/utils/download_inmet_data.py -s A612 -b 2023 -e 2023 -o data/raw/inmet --api_token %INMET_API_TOKEN%
 
+:: Concat inmet data
+::python src/unify_inmet.py data/raw/lst/20230101 data/raw/inmet data/processed/inmet --aggregated True
+
 :: Calculate LST - OK
 ::python src/calculate_min_max_avg_lst.py 20230101 20231231 data/raw/lst data/processed/lst
 
-:: Concat inmet data
-python src/unify_inmet.py data/raw/lst/20230101 data/raw/inmet data/processed/inmet --aggregated True
-
 :: Build
-::python src/build_dataset.py
+python src/build_dataset.py data/processed/sinan/DENG.parquet data/processed/cnes/STRJ2401.parquet data/raw/lst/ref.nc data/processed/inmet/aggregated.parquet data/processed/sinan/sinan.parquet
