@@ -1,96 +1,166 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
 import matplotlib.pyplot as plt
 
-# Load the dataset from the CSV file
-file_path = 'data/processed/sinan/sinan.parquet'
-data = pd.read_parquet(file_path)
+# Load the dataset
+csv_file_path = 'data/processed/sinan/sinan.parquet'
+data = pd.read_parquet(csv_file_path)
 
-# Drop the ID_AGRAVO column
-if 'ID_AGRAVO' in data.columns:
-    data = data.drop(columns=['ID_AGRAVO'])
+# Convert the date column to datetime format
+data['DT_NOTIFIC'] = pd.to_datetime(data['DT_NOTIFIC'])
 
-# Drop unnamed columns
-data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+# Sort the data by ID_UNIDADE and DT_NOTIFIC
+data_sorted = data.sort_values(by=['ID_UNIDADE', 'DT_NOTIFIC'])
 
-# Convert the date column to datetime format and sort by date
-data['DT_NOTIFIC'] = pd.to_datetime(data['DT_NOTIFIC'], format='%Y%m%d', errors='coerce')
-data = data.dropna(subset=['DT_NOTIFIC'])  # Drop rows where date conversion failed
-data = data.sort_values('DT_NOTIFIC')
+# Drop the 'Unnamed: 0' column if present
+data_sorted = data_sorted.drop(columns=['Unnamed: 0'], errors='ignore')
 
-# Check for NaN or infinite values
-data = data.replace([np.inf, -np.inf], np.nan)
-data = data.dropna()
+# Define a function to create sequences of a given length from the data
+def create_sequences(data, sequence_length, features):
+    sequences = []
+    targets = []
+    for unit in data['ID_UNIDADE'].unique():
+        unit_data = data[data['ID_UNIDADE'] == unit]
+        for i in range(len(unit_data) - sequence_length):
+            seq = unit_data.iloc[i:i + sequence_length]
+            target = unit_data.iloc[i + sequence_length]
+            sequences.append(seq[features].values)
+            targets.append(target['CASES'])
+    return np.array(sequences), np.array(targets)
 
-# Group the data by ID_UNIDADE
-grouped = data.groupby('ID_UNIDADE')
+# Define the different feature sets
+all_features = ['avg_sat', 'max_sat', 'min_sat', 'avg_ws', 'max_ws', 'min_ws']
+sat_features = ['avg_sat', 'max_sat', 'min_sat']
+ws_features = ['avg_ws', 'max_ws', 'min_ws']
 
-# Function to prepare sequences
-def create_sequences(X, y, seq_length=10):
-    Xs, ys = [], []
-    for i in range(len(X) - seq_length):
-        Xs.append(X[i:i + seq_length])
-        ys.append(y[i + seq_length])
-    return np.array(Xs), np.array(ys)
+# Create sequences for each feature set
+sequence_length = 7
+sequences_all, targets_all = create_sequences(data_sorted, sequence_length, all_features)
+sequences_sat, targets_sat = create_sequences(data_sorted, sequence_length, sat_features)
+sequences_ws, targets_ws = create_sequences(data_sorted, sequence_length, ws_features)
 
-# Prepare a dictionary to store models and scalers for each ID_UNIDADE
-models = {}
-scalers = {}
+# Normalize the features for each set
+scaler_all = MinMaxScaler()
+scaler_sat = MinMaxScaler()
+scaler_ws = MinMaxScaler()
 
-for id_unidade, group in grouped:
-    # Drop unnecessary columns and separate features and target
-    X = group.drop(columns=['CASES', 'DT_NOTIFIC', 'ID_UNIDADE'])
-    y = group['CASES']
+num_sequences_all, _, num_features_all = sequences_all.shape
+num_sequences_sat, _, num_features_sat = sequences_sat.shape
+num_sequences_ws, _, num_features_ws = sequences_ws.shape
+
+sequences_all_reshaped = sequences_all.reshape(-1, num_features_all)
+sequences_sat_reshaped = sequences_sat.reshape(-1, num_features_sat)
+sequences_ws_reshaped = sequences_ws.reshape(-1, num_features_ws)
+
+sequences_all_normalized = scaler_all.fit_transform(sequences_all_reshaped).reshape(num_sequences_all, sequence_length, num_features_all)
+sequences_sat_normalized = scaler_sat.fit_transform(sequences_sat_reshaped).reshape(num_sequences_sat, sequence_length, num_features_sat)
+sequences_ws_normalized = scaler_ws.fit_transform(sequences_ws_reshaped).reshape(num_sequences_ws, sequence_length, num_features_ws)
+
+# Determine the split point based on dates (e.g., 80% for training, 20% for testing)
+split_date = data_sorted['DT_NOTIFIC'].quantile(0.8)
+
+# Split the data into training and testing sets for each feature set based on the date
+def train_test_split_by_date(sequences, targets, data, split_date):
+    train_indices = data['DT_NOTIFIC'] <= split_date
+    test_indices = data['DT_NOTIFIC'] > split_date
     
-    # Normalize the features
-    scaler = MinMaxScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_train = sequences[train_indices[:len(sequences)]]
+    y_train = targets[train_indices[:len(targets)]]
+    X_test = sequences[test_indices[:len(sequences)]]
+    y_test = targets[test_indices[:len(targets)]]
     
-    # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
-    
-    # Prepare sequences
-    seq_length = 10
-    X_train_seq, y_train_seq = create_sequences(X_train, y_train, seq_length)
-    X_test_seq, y_test_seq = create_sequences(X_test, y_test, seq_length)
-    
-    # Debugging prints to inspect shapes
-    print(f'ID_UNIDADE: {id_unidade}')
-    print(f'X_train shape: {X_train.shape}')
-    print(f'X_train_seq shape: {X_train_seq.shape}')
-    
-    if X_train_seq.shape[0] == 0 or X_train_seq.shape[1] == 0 or X_train_seq.shape[2] == 0:
-        print(f'Skipping ID_UNIDADE: {id_unidade} due to insufficient data after sequencing.')
-        continue
-    
-    # Build the LSTM model
+    return X_train, X_test, y_train, y_test
+
+X_train_all, X_test_all, y_train_all, y_test_all = train_test_split_by_date(sequences_all_normalized, targets_all, data_sorted, split_date)
+X_train_sat, X_test_sat, y_train_sat, y_test_sat = train_test_split_by_date(sequences_sat_normalized, targets_sat, data_sorted, split_date)
+X_train_ws, X_test_ws, y_train_ws, y_test_ws = train_test_split_by_date(sequences_ws_normalized, targets_ws, data_sorted, split_date)
+
+# Function to create and train an LSTM model
+def train_lstm_model(X_train, y_train, X_test, y_test, input_shape):
     model = Sequential()
-    model.add(LSTM(50, activation='relu', input_shape=(seq_length, X_train_seq.shape[2])))
+    model.add(LSTM(50, activation='relu', input_shape=input_shape))
+    model.add(Dropout(0.2))
     model.add(Dense(1))
     model.compile(optimizer='adam', loss='mse')
-    
-    # Train the model
-    model.fit(X_train_seq, y_train_seq, epochs=50, batch_size=32, validation_split=0.1)
-    
-    # Store the model and scaler
-    models[id_unidade] = model
-    scalers[id_unidade] = scaler
-    
-    # Evaluate the model
-    loss = model.evaluate(X_test_seq, y_test_seq)
-    print(f'ID_UNIDADE: {id_unidade}, Test Loss: {loss}')
-    
-    # Predict the cases
-    y_pred = model.predict(X_test_seq)
-    
-    # Plot the results
-    plt.figure(figsize=(10, 6))
-    plt.plot(y_test_seq, label='True Cases')
-    plt.plot(y_pred, label='Predicted Cases')
-    plt.title(f'ID_UNIDADE: {id_unidade}')
-    plt.legend()
-    plt.show()
+    history = model.fit(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
+    return model, history
+
+# Function to create and train a CNN model
+def train_cnn_model(X_train, y_train, X_test, y_test, input_shape):
+    model = Sequential()
+    model.add(Conv1D(filters=64, kernel_size=2, activation='relu', input_shape=input_shape))
+    model.add(MaxPooling1D(pool_size=2))
+    model.add(Flatten())
+    model.add(Dense(50, activation='relu'))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mse')
+    history = model.fit(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
+    return model, history
+
+# Train the LSTM models
+model_lstm_all, history_lstm_all = train_lstm_model(X_train_all, y_train_all, X_test_all, y_test_all, (sequence_length, num_features_all))
+model_lstm_sat, history_lstm_sat = train_lstm_model(X_train_sat, y_train_sat, X_test_sat, y_test_sat, (sequence_length, num_features_sat))
+model_lstm_ws, history_lstm_ws = train_lstm_model(X_train_ws, y_train_ws, X_test_ws, y_test_ws, (sequence_length, num_features_ws))
+
+# Train the CNN models
+model_cnn_all, history_cnn_all = train_cnn_model(X_train_all, y_train_all, X_test_all, y_test_all, (sequence_length, num_features_all))
+model_cnn_sat, history_cnn_sat = train_cnn_model(X_train_sat, y_train_sat, X_test_sat, y_test_sat, (sequence_length, num_features_sat))
+model_cnn_ws, history_cnn_ws = train_cnn_model(X_train_ws, y_train_ws, X_test_ws, y_test_ws, (sequence_length, num_features_ws))
+
+# Plot training & validation loss values for all models
+plt.figure(figsize=(15, 10))
+
+plt.subplot(2, 3, 1)
+plt.plot(history_lstm_all.history['loss'], label='Train')
+plt.plot(history_lstm_all.history['val_loss'], label='Validation')
+plt.title('LSTM with All Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.subplot(2, 3, 2)
+plt.plot(history_lstm_sat.history['loss'], label='Train')
+plt.plot(history_lstm_sat.history['val_loss'], label='Validation')
+plt.title('LSTM with Satellite Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.subplot(2, 3, 3)
+plt.plot(history_lstm_ws.history['loss'], label='Train')
+plt.plot(history_lstm_ws.history['val_loss'], label='Validation')
+plt.title('LSTM with Weather Station Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.subplot(2, 3, 4)
+plt.plot(history_cnn_all.history['loss'], label='Train')
+plt.plot(history_cnn_all.history['val_loss'], label='Validation')
+plt.title('CNN with All Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.subplot(2, 3, 5)
+plt.plot(history_cnn_sat.history['loss'], label='Train')
+plt.plot(history_cnn_sat.history['val_loss'], label='Validation')
+plt.title('CNN with Satellite Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.subplot(2, 3, 6)
+plt.plot(history_cnn_ws.history['loss'], label='Train')
+plt.plot(history_cnn_ws.history['val_loss'], label='Validation')
+plt.title('CNN with Weather Station Features')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(loc='upper right')
+
+plt.tight_layout()
+plt.show()

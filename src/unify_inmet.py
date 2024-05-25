@@ -20,8 +20,8 @@ def unify_inmet(raw_lst_path, raw_inmet_path, processed_inmet_path, aggregated):
         if filename.endswith('.parquet'):
             file_path = os.path.join(raw_inmet_path, filename)
             df = pd.read_parquet(file_path)           
-            lat = df['VL_LATITUDE'][0]
-            lon = df['VL_LONGITUDE'][0]
+            lat = df['VL_LATITUDE'].iloc[0]
+            lon = df['VL_LONGITUDE'].iloc[0]
             x, y = find_closest_lat_lon(lat, lon, lats, lons)           
             df = df[columns]
             df['x'] = x
@@ -54,6 +54,7 @@ def unify_inmet(raw_lst_path, raw_inmet_path, processed_inmet_path, aggregated):
         logging.info(f"Saved concatenated inmet file at: {processed_inmet_path}/concat.parquet")
 
 def main():
+    '''
     parser = argparse.ArgumentParser(description="Unify INMET datasets")
     parser.add_argument("raw_lst_path", help="Path to LST data, for reference")
     parser.add_argument("raw_inmet_path", help="Path to INMET data")
@@ -66,6 +67,8 @@ def main():
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s - %(levelname)s - %(message)s")
 
     unify_inmet(args.raw_lst_path, args.raw_inmet_path, args.processed_inmet_path, args.aggregated)
+'''
+    unify_inmet('data/raw/lst/20200101', 'data/raw/inmet', 'data/processed/inmet', True)
 
 if __name__ == "__main__":
     main()

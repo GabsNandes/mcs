@@ -28,9 +28,6 @@ def clean_sinan_dataset(sinan_df, cnes_df):
     sinan_df['avg_ws'] = np.nan
     sinan_df['max_ws'] = np.nan
     sinan_df['min_ws'] = np.nan   
-
-    sinan_df["lat"] = ''
-    sinan_df["lon"] = ''
     
     sinan_df['ID_UNIDADE'] = sinan_df['ID_UNIDADE'].str.strip()
     
@@ -86,8 +83,6 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, inmet_path, output_
         sinan_df.at[index, 'avg_sat'] = truncate(lst_data['avg'][lst_x, lst_y], 2)
         sinan_df.at[index, 'max_sat'] = truncate(lst_data['max'][lst_x, lst_y], 2)
         sinan_df.at[index, 'min_sat'] = truncate(lst_data['min'][lst_x, lst_y], 2)
-        sinan_df.at[index, 'lon'] = lat
-        sinan_df.at[index, 'lat'] = lon
 
         # Find the closest weather station
         station_idx = find_closest_station(float(lat), float(lon), station_coords)
@@ -100,9 +95,28 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, inmet_path, output_
             sinan_df.at[index, 'max_ws'] = truncate(inmet_row['TEM_MAX'].values[0], 2)
             sinan_df.at[index, 'min_ws'] = truncate(inmet_row['TEM_MIN'].values[0], 2)
     
+    # Additional cleaning steps
+    # Drop the ID_AGRAVO column if it exists
+    if 'ID_AGRAVO' in sinan_df.columns:
+        sinan_df = sinan_df.drop(columns=['ID_AGRAVO'])           
+
+    # Drop unnamed columns
     sinan_df = sinan_df.loc[:, ~sinan_df.columns.str.contains('^Unnamed')]
+
+    # Convert the date column to datetime format and sort by date
+    sinan_df['DT_NOTIFIC'] = pd.to_datetime(sinan_df['DT_NOTIFIC'], format='%Y%m%d', errors='coerce')
+    sinan_df = sinan_df.dropna(subset=['DT_NOTIFIC'])  # Drop rows where date conversion failed
+    sinan_df = sinan_df.sort_values('DT_NOTIFIC')
+
+    # Check for NaN or infinite values and drop rows containing them
+    sinan_df = sinan_df.replace([np.inf, -np.inf], np.nan)
+    sinan_df = sinan_df.dropna()
+
+    # Drop rows where avg_sat, max_sat, min_sat, avg_ws, max_ws, min_ws have no value
+    sinan_df = sinan_df.dropna(subset=['avg_sat', 'max_sat', 'min_sat', 'avg_ws', 'max_ws', 'min_ws'])
+
+    # Save the cleaned data to a new CSV file (optional)
     sinan_df.to_parquet(output_path)
-    sinan_df.head(100).to_csv('teste.csv')
 
 def main():
     parser = argparse.ArgumentParser(description="Unify INMET datasets")
