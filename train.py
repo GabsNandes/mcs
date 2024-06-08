@@ -6,20 +6,20 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
 import matplotlib.pyplot as plt
 
-# Load the dataset
-csv_file_path = 'data/processed/sinan/sinan.parquet'
-data = pd.read_parquet(csv_file_path)
+# Carregar o dataset
+csv_file_path = 'path_to_your_csv_file.csv'
+data = pd.read_csv(csv_file_path)
 
-# Convert the date column to datetime format
+# Converter a coluna de datas para o formato datetime
 data['DT_NOTIFIC'] = pd.to_datetime(data['DT_NOTIFIC'])
 
-# Sort the data by ID_UNIDADE and DT_NOTIFIC
+# Ordenar os dados por ID_UNIDADE e DT_NOTIFIC
 data_sorted = data.sort_values(by=['ID_UNIDADE', 'DT_NOTIFIC'])
 
-# Drop the 'Unnamed: 0' column if present
+# Remover a coluna 'Unnamed: 0' se estiver presente
 data_sorted = data_sorted.drop(columns=['Unnamed: 0'], errors='ignore')
 
-# Define a function to create sequences of a given length from the data
+# Função para criar sequências de um determinado comprimento a partir dos dados
 def create_sequences(data, sequence_length, features):
     sequences = []
     targets = []
@@ -32,18 +32,18 @@ def create_sequences(data, sequence_length, features):
             targets.append(target['CASES'])
     return np.array(sequences), np.array(targets)
 
-# Define the different feature sets
-all_features = ['avg_sat', 'max_sat', 'min_sat', 'avg_ws', 'max_ws', 'min_ws']
+# Definir os diferentes conjuntos de recursos
+all_features = ['avg_sat', 'max_sat', 'min_sat', 'avg_ws', 'max_ws', 'min_ws', 'lat', 'lon']
 sat_features = ['avg_sat', 'max_sat', 'min_sat']
 ws_features = ['avg_ws', 'max_ws', 'min_ws']
 
-# Create sequences for each feature set
+# Criar sequências para cada conjunto de recursos
 sequence_length = 7
 sequences_all, targets_all = create_sequences(data_sorted, sequence_length, all_features)
 sequences_sat, targets_sat = create_sequences(data_sorted, sequence_length, sat_features)
 sequences_ws, targets_ws = create_sequences(data_sorted, sequence_length, ws_features)
 
-# Normalize the features for each set
+# Normalizar os recursos para cada conjunto
 scaler_all = MinMaxScaler()
 scaler_sat = MinMaxScaler()
 scaler_ws = MinMaxScaler()
@@ -60,10 +60,10 @@ sequences_all_normalized = scaler_all.fit_transform(sequences_all_reshaped).resh
 sequences_sat_normalized = scaler_sat.fit_transform(sequences_sat_reshaped).reshape(num_sequences_sat, sequence_length, num_features_sat)
 sequences_ws_normalized = scaler_ws.fit_transform(sequences_ws_reshaped).reshape(num_sequences_ws, sequence_length, num_features_ws)
 
-# Determine the split point based on dates (e.g., 80% for training, 20% for testing)
+# Determinar o ponto de divisão com base nas datas (ex.: 80% para treinamento, 20% para teste)
 split_date = data_sorted['DT_NOTIFIC'].quantile(0.8)
 
-# Split the data into training and testing sets for each feature set based on the date
+# Função para dividir os dados de treino e teste com base na data
 def train_test_split_by_date(sequences, targets, data, split_date):
     train_indices = data['DT_NOTIFIC'] <= split_date
     test_indices = data['DT_NOTIFIC'] > split_date
@@ -79,7 +79,7 @@ X_train_all, X_test_all, y_train_all, y_test_all = train_test_split_by_date(sequ
 X_train_sat, X_test_sat, y_train_sat, y_test_sat = train_test_split_by_date(sequences_sat_normalized, targets_sat, data_sorted, split_date)
 X_train_ws, X_test_ws, y_train_ws, y_test_ws = train_test_split_by_date(sequences_ws_normalized, targets_ws, data_sorted, split_date)
 
-# Function to create and train an LSTM model
+# Função para criar e treinar um modelo LSTM
 def train_lstm_model(X_train, y_train, X_test, y_test, input_shape):
     model = Sequential()
     model.add(LSTM(50, activation='relu', input_shape=input_shape))
@@ -89,7 +89,7 @@ def train_lstm_model(X_train, y_train, X_test, y_test, input_shape):
     history = model.fit(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
     return model, history
 
-# Function to create and train a CNN model
+# Função para criar e treinar um modelo CNN
 def train_cnn_model(X_train, y_train, X_test, y_test, input_shape):
     model = Sequential()
     model.add(Conv1D(filters=64, kernel_size=2, activation='relu', input_shape=input_shape))
@@ -101,17 +101,17 @@ def train_cnn_model(X_train, y_train, X_test, y_test, input_shape):
     history = model.fit(X_train, y_train, epochs=50, validation_data=(X_test, y_test))
     return model, history
 
-# Train the LSTM models
+# Treinar os modelos LSTM
 model_lstm_all, history_lstm_all = train_lstm_model(X_train_all, y_train_all, X_test_all, y_test_all, (sequence_length, num_features_all))
 model_lstm_sat, history_lstm_sat = train_lstm_model(X_train_sat, y_train_sat, X_test_sat, y_test_sat, (sequence_length, num_features_sat))
 model_lstm_ws, history_lstm_ws = train_lstm_model(X_train_ws, y_train_ws, X_test_ws, y_test_ws, (sequence_length, num_features_ws))
 
-# Train the CNN models
+# Treinar os modelos CNN
 model_cnn_all, history_cnn_all = train_cnn_model(X_train_all, y_train_all, X_test_all, y_test_all, (sequence_length, num_features_all))
 model_cnn_sat, history_cnn_sat = train_cnn_model(X_train_sat, y_train_sat, X_test_sat, y_test_sat, (sequence_length, num_features_sat))
 model_cnn_ws, history_cnn_ws = train_cnn_model(X_train_ws, y_train_ws, X_test_ws, y_test_ws, (sequence_length, num_features_ws))
 
-# Plot training & validation loss values for all models
+# Plotar os valores de perda de treinamento e validação para todos os modelos
 plt.figure(figsize=(15, 10))
 
 plt.subplot(2, 3, 1)
@@ -164,3 +164,4 @@ plt.legend(loc='upper right')
 
 plt.tight_layout()
 plt.show()
+

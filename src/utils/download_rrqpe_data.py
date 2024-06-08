@@ -9,15 +9,16 @@ import os
 def download_rrqpe_data(date, path):
     product = "ABI-L2-RRQPEF"
     os.makedirs(path, exist_ok=True)
-    for hour in np.arange(0,24-3,1):
-        yyyymmddhhmn = f"{date}{hour:02.0f}00"
-        file_name = download_goes_prod(yyyymmddhhmn, product, path)    
+    for hour in np.arange(0,21,1):
+        for minute in range(0, 60, 10):
+            yyyymmddhhmn = f"{date}{hour:02.0f}{minute:02.0f}"
+            download_goes_prod(yyyymmddhhmn, product, path)  
 
-    for hour in np.arange(24-3,24,1):       
-        previous_day = datetime.strptime(date, '%Y%m%d')
-        previous_day -= timedelta(days=1)
-        yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}00"
-        file_name = download_goes_prod(yyyymmddhhmn, product, path)
+    previous_day = datetime.strptime(date, '%Y%m%d') - timedelta(days=1)
+    for hour in np.arange(21,24,1):       
+        for minute in range(0, 60, 10):
+            yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}{minute:02.0f}"
+            download_goes_prod(yyyymmddhhmn, product, path)
 
 def main():
     parser = argparse.ArgumentParser(description="Download ABI-L2-RRQPE product from GOES-16 for a date")
