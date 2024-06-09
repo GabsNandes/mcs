@@ -2,23 +2,35 @@ from utils.download_goes_prod import download_goes_prod
 import numpy as np
 import logging
 import argparse
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def download_rrqpe_data(date, path):
     product = "ABI-L2-RRQPEF"
     os.makedirs(path, exist_ok=True)
-    for hour in np.arange(0,21,1):
-        for minute in range(0, 60, 10):
-            yyyymmddhhmn = f"{date}{hour:02.0f}{minute:02.0f}"
-            download_goes_prod(yyyymmddhhmn, product, path)  
 
-    previous_day = datetime.strptime(date, '%Y%m%d') - timedelta(days=1)
-    for hour in np.arange(21,24,1):       
-        for minute in range(0, 60, 10):
-            yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}{minute:02.0f}"
-            download_goes_prod(yyyymmddhhmn, product, path)
+    def download_for_time(yyyymmddhhmn):
+        download_goes_prod(yyyymmddhhmn, product, path)
+    
+    futures = []
+    with ThreadPoolExecutor() as executor:
+        # For the given day
+        for hour in np.arange(0, 21, 1):
+            for minute in range(0, 60, 10):
+                yyyymmddhhmn = f"{date}{hour:02.0f}{minute:02.0f}"
+                futures.append(executor.submit(download_for_time, yyyymmddhhmn))
+        
+        # For the previous day
+        previous_day = datetime.strptime(date, '%Y%m%d') - timedelta(days=1)
+        for hour in np.arange(21, 24, 1):       
+            for minute in range(0, 60, 10):
+                yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}{minute:02.0f}"
+                futures.append(executor.submit(download_for_time, yyyymmddhhmn))
+        
+        # Wait for all tasks to complete
+        for future in as_completed(futures):
+            future.result()  # This will wait for each task to finish
 
 def main():
     parser = argparse.ArgumentParser(description="Download ABI-L2-RRQPE product from GOES-16 for a date")

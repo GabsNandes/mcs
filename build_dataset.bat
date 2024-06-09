@@ -57,7 +57,7 @@
 ::python src/calculate_min_max_avg_lst.py 20200101 20231231 data/raw/lst data/processed/lst
 
 :: Download and Calculate RRQPE - OK
-python src/calculate_accumulated_rrqpe.py 20211002 20231231 data/raw/rrqpe data/processed/rrqpe
+python src/calculate_accumulated_rrqpe.py 20230213 20231231 data/raw/rrqpe data/processed/rrqpe
 
 :: Concat inmet data
 ::python src/unify_inmet.py data/raw/lst/20200101 data/raw/inmet data/processed/inmet --aggregated True
