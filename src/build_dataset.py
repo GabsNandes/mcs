@@ -96,7 +96,7 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_fil
         sinan_df.at[index, 'avg_sat'] = truncate(lst_data['avg'][lst_x, lst_y], 2)
         sinan_df.at[index, 'max_sat'] = truncate(lst_data['max'][lst_x, lst_y], 2)
         sinan_df.at[index, 'min_sat'] = truncate(lst_data['min'][lst_x, lst_y], 2)
-        sinan_df.at[index, 'acc_sat'] = truncate(rrqpe_data['avg'][rrqpe_x, rrqpe_y], 2)
+        sinan_df.at[index, 'acc_sat'] = truncate(rrqpe_data['acum'][rrqpe_x, rrqpe_y], 2)
 
         # Find the closest weather station
         station_idx = find_closest_station(float(lat), float(lon), station_coords)
@@ -105,7 +105,7 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_fil
         # Filter the inmet_df by date
         inmet_row = inmet_df[(inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & (inmet_df['DT_MEDICAO'] == dt_notific_date)]
         if not inmet_row.empty:
-            sinan_df.at[index, 'acc_ws'] = truncate(inmet_row['PRE_ACC'].values[0], 2)
+            sinan_df.at[index, 'acc_ws'] = truncate(inmet_row['CHUVA'].values[0], 2)
             sinan_df.at[index, 'avg_ws'] = truncate(inmet_row['TEM_AVG'].values[0], 2)
             sinan_df.at[index, 'max_ws'] = truncate(inmet_row['TEM_MAX'].values[0], 2)
             sinan_df.at[index, 'min_ws'] = truncate(inmet_row['TEM_MIN'].values[0], 2)

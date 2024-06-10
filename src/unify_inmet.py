@@ -4,7 +4,7 @@ import argparse
 import os
 
 def unify_inmet(raw_inmet_path, processed_inmet_path, aggregated):
-    columns = ['CD_ESTACAO', 'DT_MEDICAO', 'HR_MEDICAO', 'TEM_MIN', 'TEM_MAX', 'TEM_INS', 'VL_LATITUDE', 'VL_LONGITUDE']
+    columns = ['CD_ESTACAO', 'DT_MEDICAO', 'HR_MEDICAO', 'TEM_MIN', 'TEM_MAX', 'TEM_INS', 'CHUVA', 'VL_LATITUDE', 'VL_LONGITUDE']
     dfs = []
     os.makedirs(processed_inmet_path, exist_ok=True)
     
@@ -18,6 +18,7 @@ def unify_inmet(raw_inmet_path, processed_inmet_path, aggregated):
             df['TEM_MIN'] = pd.to_numeric(df['TEM_MIN'], errors='coerce')
             df['TEM_MAX'] = pd.to_numeric(df['TEM_MAX'], errors='coerce')
             df['TEM_INS'] = pd.to_numeric(df['TEM_INS'], errors='coerce')
+            df['CHUVA'] = pd.to_numeric(df['CHUVA'], errors='coerce')
             
             dfs.append(df)
    
@@ -28,17 +29,17 @@ def unify_inmet(raw_inmet_path, processed_inmet_path, aggregated):
             'TEM_MIN': 'min',
             'TEM_MAX': 'max',
             'TEM_INS': 'mean',
+            'CHUVA' : 'sum',
             'VL_LATITUDE': 'first',
             'VL_LONGITUDE': 'first'            
         }).reset_index()
-        df_aggregated.columns = ['CD_ESTACAO', 'DT_MEDICAO', 'TEM_MIN', 'TEM_MAX', 'TEM_AVG', 'VL_LATITUDE', 'VL_LONGITUDE']
+        df_aggregated.columns = ['CD_ESTACAO', 'DT_MEDICAO', 'TEM_MIN', 'TEM_MAX', 'TEM_AVG', 'CHUVA', 'VL_LATITUDE', 'VL_LONGITUDE']
 
         logging.info(f"Saved aggregated inmet file at: {processed_inmet_path}/aggregated.parquet")
 
-        df_aggregated.to_parquet(os.path.join(processed_inmet_path, 'aggregated.parquet'))
+        df_aggregated.to_parquet(os.path.join(processed_inmet_path, 'aggregated.parquet'))   
     else:
         df_concat.to_parquet(os.path.join(processed_inmet_path, 'concat.parquet'))
-
         logging.info(f"Saved concatenated inmet file at: {processed_inmet_path}/concat.parquet")
 
 def main():

@@ -6,6 +6,9 @@
 ::python src/process_cnes_dataset.py data/raw/cnes/STRJ2401.parquet data/processed/cnes/STRJ2401.parquet
 
 :: Download and process SINAN dengue cases - OK - Download only works on linux due to pysus
+::python src/utils/download_sinan_file.py DENG 2020 data/raw/sinan
+::python src/utils/download_sinan_file.py DENG 2021 data/raw/sinan
+::python src/utils/download_sinan_file.py DENG 2022 data/raw/sinan
 ::python src/utils/download_sinan_file.py DENG 2023 data/raw/sinan
 ::python src/unify_sinan.py data/raw/sinan data/processed/sinan
 ::python src/extract_sinan_cases.py data/processed/sinan/concat.parquet data/processed/sinan/DENG.parquet --cod_uf 33
@@ -57,10 +60,10 @@
 ::python src/calculate_min_max_avg_lst.py 20200101 20231231 data/raw/lst data/processed/lst
 
 :: Download and Calculate RRQPE - OK
-python src/calculate_accumulated_rrqpe.py 20230213 20231231 data/raw/rrqpe data/processed/rrqpe
+::python src/calculate_accumulated_rrqpe.py 20200101 20231231 data/raw/rrqpe data/processed/rrqpe
 
 :: Concat inmet data
-::python src/unify_inmet.py data/raw/lst/20200101 data/raw/inmet data/processed/inmet --aggregated True
+::python src/unify_inmet.py data/raw/inmet data/processed/inmet
 
 :: Build
-::python src/build_dataset.py data/processed/sinan/DENG.parquet data/processed/cnes/STRJ2401.parquet data/raw/lst/ref.nc data/processed/inmet/aggregated.parquet data/processed/sinan/sinan.parquet
+python src/build_dataset.py data/processed/sinan/DENG.parquet data/processed/cnes/STRJ2401.parquet data/raw/lst/ref.nc data/raw/rrqpe/ref.nc data/processed/inmet/aggregated.parquet data/processed/sinan/sinan.parquet
