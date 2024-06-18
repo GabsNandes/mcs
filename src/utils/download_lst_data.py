@@ -2,23 +2,30 @@ from utils.download_goes_prod import download_goes_prod
 import numpy as np
 import logging
 import argparse
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def download_lst_data(date, path):
     product = "ABI-L2-LSTF"
     os.makedirs(path, exist_ok=True)  # Ensure output directory exists
-    
-    for hour in np.arange(0,24-3,1):
-        yyyymmddhhmn = f"{date}{hour:02.0f}00"
-        file_name = download_goes_prod(yyyymmddhhmn, product, path)    
 
-    for hour in np.arange(24-3,24,1):       
-        previous_day = datetime.strptime(date, '%Y%m%d')
-        previous_day -= timedelta(days=1)
-        yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}00"
-        file_name = download_goes_prod(yyyymmddhhmn, product, path)
+    def download_for_time(yyyymmddhhmn):
+        download_goes_prod(yyyymmddhhmn, product, path)   
+    
+    
+    futures = []
+    with ThreadPoolExecutor() as executor:
+
+        for hour in np.arange(0,24-3,1):
+            yyyymmddhhmn = f"{date}{hour:02.0f}00"
+            futures.append(executor.submit(download_for_time, yyyymmddhhmn))
+
+        for hour in np.arange(24-3,24,1):       
+            previous_day = datetime.strptime(date, '%Y%m%d')
+            previous_day -= timedelta(days=1)
+            yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}00"
+            futures.append(executor.submit(download_for_time, yyyymmddhhmn))
 
 def main():
     parser = argparse.ArgumentParser(description="Download ABI-L2-LSTF product from GOES-16 for a date")

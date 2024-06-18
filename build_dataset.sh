@@ -1,5 +1,5 @@
 # Activate env
-conda activate env
+#conda activate env
 
 # Download and process CNES Health Units data - OK
 #python src/utils/download_cnes_file.py ST RJ 2401 data/raw/cnes/STRJ2401.dbc
@@ -58,7 +58,7 @@ conda activate env
 #python src/utils/download_inmet_data.py -s A612 -b 2020 -e 2023 -o data/processed/inmet --api_token $INMET_API_TOKEN
 
 # Calculate LST - OK
-#python src/calculate_min_max_avg_lst.py 20200101 20231231 data/raw/lst data/processed/lst
+python src/calculate_min_max_avg_lst.py 20200101 20231231 data/raw/lst data/processed/lst
 
 # Download and Calculate RRQPE - OK
 #python src/calculate_accumulated_rrqpe.py 20200101 20231231 data/raw/rrqpe data/processed/rrqpe
