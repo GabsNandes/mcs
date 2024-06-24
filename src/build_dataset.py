@@ -43,16 +43,6 @@ def clean_sinan_dataset(sinan_df, cnes_df):
     return sinan_df
 
 def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_file, inmet_path, output_path):
-    # Variáveis de parâmetros
-    prec_significativa = 10 # mm - 
-    temperatura_otima_eclosao = 25
-    temperatura_otima_reproducao = 25
-    umidade_otima_reproducao = 60
-    limiar_chuva_intensa = 50  # mm
-    limiar_chuva_extrema = 100  # mm
-    limiar_risco_lixiviacao = 20  # mm
-    population_size = 100000  # Placeholder para o tamanho da população, ajuste conforme necessário
-
     sinan_df = pd.read_parquet(sinan_path)
     cnes_df = pd.read_parquet(cnes_path)
     inmet_df = pd.read_parquet(inmet_path)
@@ -76,16 +66,15 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_fil
 
     # Add columns for derived data
     derived_columns = [
-        'Temp_Mov_7d_WS', 'Temp_Mov_14d_WS', 'Temp_Mov_30d_WS', 'Temp_Max_WS', 'Temp_Min_WS', 'Amp_Termica_WS',
-        'Dias_Temp_Acima_20_WS', 'Anomalia_Temp_WS', 'Prec_Acum_7d_WS', 'Prec_Acum_14d_WS', 'Prec_Acum_30d_WS',
-        'Dias_Prec_Significativa_WS', 'Prec_Mov_7d_WS', 'Prec_Mov_14d_WS', 'Prec_Mov_30d_WS', 'Dias_Sem_Prec_WS',
-        'Indice_Ambiental_WS', 'Condicoes_Otimas_Reproducao_WS', 'Relacao_Temp_Prec_Acumulada_WS', 'Temp_Otima_Eclosao_WS',
-        'Dias_Temp_Otima_WS', 'Periodo_Incubacao_Ovos_WS', 'Dias_Condicoes_Favoraveis_Eclosao_WS', 'Chuvas_Intensas_WS',
-        'Dias_Prec_Extrema_WS', 'Periodos_Chuva_Continua_WS', 'Risco_Lixiviacao_WS', 'Taxa_Incidencia_Dengue_WS',
-        'Casos_por_100000_Habitantes_WS', 'Risco_Infeccao_WS', 'Dias_Desde_Ultimo_Caso_WS', 'Taxa_Crescimento_Casos_WS',
-        'Indice_Reproducao_Mosquito_WS', 'Dias_Condicoes_Otimas_Reproducao_WS', 'Estimativa_Populacao_Mosquitos_WS',
-        'Periodos_Alta_Reprodutividade_WS', 'Num_Ciclos_Vida_Completos_WS'
+        'temp_mov_7d_ws', 'temp_mov_14d_ws', 'temp_mov_30d_ws', 
+        'prec_mov_7d_ws', 'prec_mov_14d_ws', 'prec_mov_30d_ws', 
+        'prec_acum_7d_ws', 'prec_acum_14d_ws', 'prec_acum_30d_ws',
+        'amp_termica_ws', 'temp_ideal_ws','temp_extrema_ws', 
+        'prec_significativa_ws', 'prec_extrema_ws',
     ]
+    for col in derived_columns:
+        sinan_df[col] = np.nan
+
     for col in derived_columns:
         sinan_df[col] = np.nan
 
@@ -138,131 +127,73 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_fil
             sinan_df.at[index, 'min_ws'] = truncate(inmet_row['TEM_MIN'].values[0], 2)
             
             # Calculate moving averages for temperature
-            sinan_df.at[index, 'Amp_Termica_WS'] = truncate(inmet_row['TEM_MAX'].values[0] - inmet_row['TEM_MIN'].values[0], 2)
-            sinan_df.at[index, 'Temp_Mov_7d_WS'] = inmet_df[
+            sinan_df.at[index, 'temp_mov_7d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
+                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
             ]['TEM_AVG'].mean()
-            sinan_df.at[index, 'Temp_Mov_14d_WS'] = inmet_df[
+            sinan_df.at[index, 'temp_mov_14d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
             ]['TEM_AVG'].mean()
-            sinan_df.at[index, 'Temp_Mov_30d_WS'] = inmet_df[
+            sinan_df.at[index, 'temp_mov_30d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
             ]['TEM_AVG'].mean()
 
-            # Precipitation calculations
-            sinan_df.at[index, 'Prec_Acum_7d_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
-            ]['CHUVA'].sum()
-            sinan_df.at[index, 'Prec_Acum_14d_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
-            ]['CHUVA'].sum()
-            sinan_df.at[index, 'Prec_Acum_30d_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
-            ]['CHUVA'].sum()
-            
-            # Count significant precipitation days
-            sinan_df.at[index, 'Dias_Prec_Significativa_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['CHUVA'] >= prec_significativa)
-            ].shape[0]
-
-            sinan_df.at[index, 'Dias_Sem_Prec_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['CHUVA'] < prec_significativa) 
-            ].shape[0]         
-            
             # Calculate moving averages for precipitation
-            sinan_df.at[index, 'Prec_Mov_7d_WS'] = inmet_df[
+            sinan_df.at[index, 'prec_mov_7d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
             ]['CHUVA'].mean()
-            sinan_df.at[index, 'Prec_Mov_14d_WS'] = inmet_df[
+            sinan_df.at[index, 'prec_mov_14d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
             ]['CHUVA'].mean()
-            sinan_df.at[index, 'Prec_Mov_30d_WS'] = inmet_df[
+            sinan_df.at[index, 'prec_mov_30d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
                 (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
-            ]['CHUVA'].mean()
+            ]['CHUVA'].mean()            
 
-            # Calculate optimal eclosion temperature and days with optimal temperature
-            sinan_df.at[index, 'Temp_Otima_Eclosao_WS'] = 1 if inmet_row['TEM_AVG'].values[0] >= temperatura_otima_eclosao else 0
-            sinan_df.at[index, 'Dias_Temp_Otima_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
-                (inmet_df['TEM_AVG'] >= temperatura_otima_eclosao)
-            ].shape[0]
-
-            # Calculate days with favorable eclosion conditions
-            sinan_df.at[index, 'Dias_Condicoes_Favoraveis_Eclosao_WS'] = inmet_df[
+            # Acc Precipitation calculations
+            sinan_df.at[index, 'prec_acum_7d_ws'] = inmet_df[
                 (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
                 (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['TEM_AVG'] >= temperatura_otima_eclosao) & 
-                (inmet_df['CHUVA'] >= 5)
-            ].shape[0]
+                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
+            ]['CHUVA'].sum()
+            sinan_df.at[index, 'prec_acum_14d_ws'] = inmet_df[
+                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
+                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
+                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
+            ]['CHUVA'].sum()
+            sinan_df.at[index, 'prec_acum_30d_ws'] = inmet_df[
+                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
+                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
+                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
+            ]['CHUVA'].sum()
 
-            sinan_df.at[index, 'Dias_Prec_Extrema_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) &
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30)) &
-                (inmet_df['CHUVA'] >= limiar_chuva_extrema)  # Arbitrary threshold for extreme rainfall
-            ].shape[0]
+            # Info found on Reinhold et Al - Effects of the Environmental Temperature on Aedes aegypti and Aedes albopictus Mosquitoes: A Review
 
-            sinan_df.at[index, 'Periodos_Chuva_Continua_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) &
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30)) &
-                (inmet_df['CHUVA'] > 0)
-            ].groupby((inmet_df['CHUVA'] > 0).ne((inmet_df['CHUVA'] > 0).shift()).cumsum()).size().max()
+            # Thermal Range
+            sinan_df.at[index, 'amp_termica_ws'] = truncate(inmet_row['TEM_MAX'].values[0] - inmet_row['TEM_MIN'].values[0], 2)
+            
+            # Optimal Temperature
+            sinan_df.at[index, 'temp_ideal_ws'] = 1 if inmet_row['TEM_AVG'].values[0] >= 21 and inmet_row['TEM_AVG'].values[0] <= 27 else 0
 
-            sinan_df.at[index, 'Risco_Lixiviacao_WS'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) &
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30)) &
-                (inmet_df['CHUVA'] > limiar_risco_lixiviacao)  # Arbitrary threshold for leaching risk
-            ].shape[0]
+            # Harmful Temperature
+            sinan_df.at[index, 'temp_extrema_ws'] = 1 if inmet_row['TEM_AVG'].values[0] <= 14 and inmet_row['TEM_AVG'].values[0] >= 38 else 0
 
-            # Derived calculations needing additional implementation
-            sinan_df.at[index, 'Anomalia_Temp_WS'] = sinan_df.at[index, 'avg_ws'] - inmet_df[(inmet_df['DT_MEDICAO'] <= dt_notific_date) & (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))]['TEM_AVG'].mean()
-            sinan_df.at[index, 'Relacao_Temp_Prec_Acumulada_WS'] = sinan_df.at[index, 'avg_ws'] / sinan_df.at[index, 'Prec_Acum_30d_WS'] if sinan_df.at[index, 'Prec_Acum_30d_WS'] != 0 else np.nan
-            sinan_df.at[index, 'Periodo_Incubacao_Ovos_WS'] = np.nan  # Placeholder para um cálculo mais complexo
-            sinan_df.at[index, 'Risco_Infeccao_WS'] = sinan_df.at[index, 'Casos_por_100000_Habitantes_WS'] * sinan_df.at[index, 'Estimativa_Populacao_Mosquitos_WS'] / 100000
-            sinan_df.at[index, 'Taxa_Crescimento_Casos_WS'] = (sinan_df.at[index, 'CASES'] - previous_cases['CASES'].sum()) / previous_cases['CASES'].sum() if previous_cases['CASES'].sum() != 0 else np.nan
-            sinan_df.at[index, 'Dias_Condicoes_Otimas_Reproducao_WS'] = np.nan  # Placeholder para um cálculo mais complexo
-            sinan_df.at[index, 'Num_Ciclos_Vida_Completos_WS'] = np.nan  # Placeholder para um cálculo mais complexo
+            # Harmful Rainfall
+            sinan_df.at[index, 'prec_significativa_ws'] = 1 if inmet_row['CHUVA'].values[0] >= 10 and inmet_row['CHUVA'].values[0] <= 150 else 0
 
-            # Calculate additional derived columns
-            sinan_df.at[index, 'Indice_Ambiental_WS'] = sinan_df.at[index, 'Temp_Mov_30d_WS'] * sinan_df.at[index, 'Prec_Acum_30d_WS']
-            sinan_df.at[index, 'Estimativa_Populacao_Mosquitos_WS'] = (sinan_df.at[index, 'Temp_Mov_30d_WS'] + sinan_df.at[index, 'Prec_Acum_30d_WS']) / 2
-            sinan_df.at[index, 'Indice_Reproducao_Mosquito_WS'] = sinan_df.at[index, 'Temp_Max_WS'] - sinan_df.at[index, 'Temp_Min_WS']
-            sinan_df.at[index, 'Periodos_Alta_Reprodutividade_WS'] = 1 if sinan_df.at[index, 'Temp_Mov_30d_WS'] > temperatura_otima_reproducao and sinan_df.at[index, 'Prec_Acum_30d_WS'] > limiar_chuva_intensa else 0
-
-            # Calculate days since the last case
-            previous_cases = sinan_df[(sinan_df['ID_UNIDADE'] == row['ID_UNIDADE']) & (sinan_df['DT_NOTIFIC'] < dt_notific_date)]
-            if not previous_cases.empty:
-                last_case_date = previous_cases['DT_NOTIFIC'].max()
-                sinan_df.at[index, 'Dias_Desde_Ultimo_Caso_WS'] = (dt_notific_date - last_case_date).days
-
-            # Calculate incidence rate
-            sinan_df.at[index, 'Taxa_Incidencia_Dengue_WS'] = (sinan_df.at[index, 'CASES'] / population_size) * 100000
-            sinan_df.at[index, 'Casos_por_100000_Habitantes_WS'] = (sinan_df.at[index, 'CASES'] / population_size) * 100000
+            # Harmful Rainfall
+            sinan_df.at[index, 'prec_extrema_ws'] = 1 if inmet_row['CHUVA'].values[0] >= 150 else 0            
+            
 
     # Additional cleaning steps
     # Drop the ID_AGRAVO column if it exists
@@ -279,12 +210,11 @@ def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_fil
 
     # Check for NaN or infinite values and drop rows containing them
     sinan_df = sinan_df.replace([np.inf, -np.inf], np.nan)
-    sinan_df = sinan_df.dropna()
+    #sinan_df = sinan_df.dropna()
 
     # Drop rows where avg_sat, max_sat, min_sat, avg_ws, max_ws, min_ws have no value
     sinan_df = sinan_df.dropna(subset=['acc_sat', 'avg_sat', 'max_sat', 'min_sat', 'acc_ws','avg_ws', 'max_ws', 'min_ws'])
 
-    # Save the cleaned data to a new CSV file (optional)
     sinan_df.to_parquet(output_path)
 
 def main():
@@ -302,6 +232,7 @@ def main():
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s - %(levelname)s - %(message)s")
     
     build_dataset(args.sinan_path, args.cnes_path, args.lst_reference_file, args.rrqpe_reference_file, args.inmet_path, args.output_path)
+    #build_dataset('data/processed/sinan/DENG.parquet', 'data/processed/cnes/STRJ2401.parquet', 'data/raw/lst/ref.nc', 'data/raw/rrqpe/ref.nc', 'data/processed/inmet/aggregated.parquet', 'data/processed/sinan/sinan.parquet')
 
 if __name__ == "__main__":
     main()
