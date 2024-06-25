@@ -47,6 +47,7 @@ def download_sinan_file(disease, year, path):
 
     """        
     try:
+        os.makedirs(path, exist_ok=True)
         sinan = SINAN().load()
         files = sinan.get_files(disease, year)
         if files:
