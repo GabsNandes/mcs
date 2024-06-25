@@ -16,7 +16,7 @@ def combine_parquet_files(folder_path, output_file):
 
     """         
     try:
-        if os.path.exists(output_file):
+        if os.path.exists(output_file) and not os.path.isdir(output_file):
             logging.info(f"Combined parquet file already exists: {output_file}")    
             return
 
