@@ -8,25 +8,24 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def download_rrqpe_data(date, path):
     product = "ABI-L2-RRQPEF"
-    os.makedirs(path, exist_ok=True)
+    os.makedirs(path, exist_ok=True)  # Ensure output directory exists
 
     def download_for_time(yyyymmddhhmn):
-        download_goes_prod(yyyymmddhhmn, product, path)
+        download_goes_prod(yyyymmddhhmn, product, path, 'hour')
+    
     
     futures = []
     with ThreadPoolExecutor() as executor:
-        # For the given day
-        for hour in np.arange(0, 21, 1):
-            for minute in range(0, 60, 10):
-                yyyymmddhhmn = f"{date}{hour:02.0f}{minute:02.0f}"
-                futures.append(executor.submit(download_for_time, yyyymmddhhmn))
-        
-        # For the previous day
-        previous_day = datetime.strptime(date, '%Y%m%d') - timedelta(days=1)
-        for hour in np.arange(21, 24, 1):       
-            for minute in range(0, 60, 10):
-                yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}{minute:02.0f}"
-                futures.append(executor.submit(download_for_time, yyyymmddhhmn))
+
+        for hour in np.arange(0,24-3,1):
+            yyyymmddhhmn = f"{date}{hour:02.0f}00"
+            futures.append(executor.submit(download_for_time, yyyymmddhhmn))
+
+        for hour in np.arange(24-3,24,1):       
+            previous_day = datetime.strptime(date, '%Y%m%d')
+            previous_day -= timedelta(days=1)
+            yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}00"
+            futures.append(executor.submit(download_for_time, yyyymmddhhmn))
         
         # Wait for all tasks to complete
         for future in as_completed(futures):

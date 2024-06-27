@@ -11,7 +11,7 @@ def download_lst_data(date, path):
     os.makedirs(path, exist_ok=True)  # Ensure output directory exists
 
     def download_for_time(yyyymmddhhmn):
-        download_goes_prod(yyyymmddhhmn, product, path)   
+        download_goes_prod(yyyymmddhhmn, product, path, 'hour')
     
     
     futures = []
@@ -27,6 +27,9 @@ def download_lst_data(date, path):
             yyyymmddhhmn = f"{previous_day.strftime('%Y%m%d')}{hour:02.0f}00"
             futures.append(executor.submit(download_for_time, yyyymmddhhmn))
 
+        # Wait for all tasks to complete
+        for future in as_completed(futures):
+            future.result()  # This will wait for each task to finish          
 def main():
     parser = argparse.ArgumentParser(description="Download ABI-L2-LSTF product from GOES-16 for a date")
     parser.add_argument("date", help="Date in yyyymmdd format")
