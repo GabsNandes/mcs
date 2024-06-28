@@ -6,8 +6,6 @@ from netCDF4 import Dataset
 def reproject_lats_lons(g16_data_file):
     # designate dataset
     g16nc = Dataset(g16_data_file, "r")
-    var_names = [ii for ii in g16nc.variables]
-    var_name = var_names[0]
 
     # GOES-R projection info and retrieving relevant constants
     proj_info = g16nc.variables["goes_imager_projection"]
@@ -41,19 +39,31 @@ def reproject_lats_lons(g16_data_file):
     b_var = -2.0 * H * np.cos(lat_rad) * np.cos(lon_rad)
     c_var = (H**2.0) - (r_eq**2.0)
 
-    r_s = (-1.0 * b_var - np.sqrt((b_var**2) - (4.0 * a_var * c_var))) / (2.0 * a_var)
+    discriminant = (b_var**2) - (4.0 * a_var * c_var)
+    discriminant[discriminant < 0] = np.nan  # Ensure non-negative values
+
+    r_s = (-1.0 * b_var - np.sqrt(discriminant)) / (2.0 * a_var)
 
     s_x = r_s * np.cos(lat_rad) * np.cos(lon_rad)
     s_y = -r_s * np.sin(lat_rad)
     s_z = r_s * np.cos(lat_rad) * np.sin(lon_rad)
 
     # latitude and longitude projection for plotting data on traditional lat/lon maps
-    lat = (180.0 / np.pi) * (
-        np.arctan(
-            ((r_eq * r_eq) / (r_pol * r_pol))
-            * ((s_z / np.sqrt(((H - s_x) * (H - s_x)) + (s_y * s_y))))
+    with np.errstate(invalid='ignore'):
+        sqrt_term = np.sqrt(((H - s_x) * (H - s_x)) + (s_y * s_y))
+        invalid_mask = sqrt_term == 0
+
+        sqrt_term[invalid_mask] = np.nan
+
+        lat = (180.0 / np.pi) * (
+            np.arctan(
+                ((r_eq * r_eq) / (r_pol * r_pol))
+                * ((s_z / sqrt_term))
+            )
         )
-    )
-    lon = (lambda_0 - np.arctan(s_y / (H - s_x))) * (180.0 / np.pi)
+        lon = (lambda_0 - np.arctan(s_y / (H - s_x))) * (180.0 / np.pi)
+
+    lat[invalid_mask] = np.nan
+    lon[invalid_mask] = np.nan
 
     return lon, lat
