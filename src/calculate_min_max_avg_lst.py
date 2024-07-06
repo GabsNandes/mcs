@@ -2,71 +2,73 @@ import pandas as pd
 from utils.download_lst_data import download_lst_data
 import logging
 import os
-import netCDF4
-import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime
 from datetime import timedelta
 import argparse
-from osgeo import gdal
-
-# GLOBALS 
-sum_ds = np.zeros((1086,1086))
-count_ds = np.zeros((1086,1086))
-min_ds = np.full((1086,1086), np.inf)
-max_ds = np.full((1086,1086), -np.inf)
-# GLOBALS 
-
-var = "LST"
+from utils.reproject_lats_lons import reproject_lats_lons
+import xarray as xr
+from netCDF4 import Dataset
+from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def download_lst(path, date):
     download_lst_data(date, f"{path}/{date}")
 
-def process_file(file_path):
-    global sum_ds, count_ds, min_ds, max_ds
+def process_file(file, date, lon, lat):
+    extent = [-44.7930, -40.7635, -23.3702, -20.7634] # TODO: Move to args
+    loni, lonf, lati, latf = extent
+    ds = xr.open_dataset(file)
+    
+    data_array = ds['LST']
+       
+    df = data_array.to_dataframe().reset_index()
+    
+    df['latitude'] = lat
+    df['longitude'] = lon
+    
+    df = df[(df['latitude'] >= lati) & (df['latitude'] <= latf) & (df['longitude'] >= loni) & (df['longitude'] <= lonf)]
 
-    img = gdal.Open(f"NETCDF:{file_path}:{var}")
-    dqf = gdal.Open(f"NETCDF:{file_path}:DQF")
+    df = df.dropna(subset=['LST'])
+    
+    df['date'] = date  # Add the date column
+   
+    return df[['date', 'LST', 'latitude', 'longitude']]
 
-    metadata = img.GetMetadata()
-    scale = float(metadata.get(var + "#scale_factor"))
-    offset = float(metadata.get(var + "#add_offset"))
-    undef = float(metadata.get(var + "#_FillValue"))
-    dtime = metadata.get("NC_GLOBAL#time_coverage_start")
+def create_dataset_from_files(path, date):
+    lstpath = f'{path}/{date}'
+    files = [os.path.join(lstpath, f) for f in os.listdir(lstpath) if f.endswith('.nc')]
 
-    ds = img.ReadAsArray(0, 0, img.RasterXSize, img.RasterYSize).astype(float)
-    ds_dqf = dqf.ReadAsArray(0, 0, dqf.RasterXSize, dqf.RasterYSize).astype(float)
+    data_list = []
+    lon, lat = reproject_lats_lons('data/raw/lst/ref.nc')
+    lat_flat = lat.flatten()
+    lon_flat = lon.flatten()
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(process_file, file, date, lon=lon_flat, lat=lat_flat): file for file in files}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing files"):
+            try:
+                data_list.append(future.result())
+            except Exception as e:
+                print(f"Error processing file {futures[future]}: {e}")
 
-    ds = (ds * scale + offset) - 273.15
-    ds[ds_dqf > 1] = np.nan
+    if data_list:
+        combined_df = pd.concat(data_list, ignore_index=True)
+    else:
+        combined_df = pd.DataFrame(columns=['date', 'LST', 'latitude', 'longitude'])
 
-    min_ds = np.fmin(min_ds, np.nan_to_num(ds, nan=np.inf))
-    max_ds = np.fmax(max_ds, np.nan_to_num(ds, nan=-np.inf))
-    sum_ds += np.where(np.isnan(ds), 0, ds)
-    count_ds += np.where(np.isnan(ds), 0, 1)
+    return combined_df
 
-def calculate_min_max_avg_lst(date, lstpath, destpath): 
-    os.makedirs(destpath, exist_ok=True)  # Ensure output directory exists
-    download_lst(lstpath, date)
+def calculate_min_max_avg_lst(date, lstpath):
+    #download_lst(lstpath, date)
+    dataset = create_dataset_from_files(lstpath, date)
+    aggregated_df = dataset.groupby(['latitude', 'longitude']).agg(
+        LST_MAX=('LST', 'max'),
+        LST_MIN=('LST', 'min'),
+        LST_AVG=('LST', 'mean')
+    ).reset_index()
+    aggregated_df['date'] = date
+    aggregated_list.append(aggregated_df)
 
-    # Init variables for a day
-    sum_ds.fill(0)
-    count_ds.fill(0)
-    min_ds.fill(np.inf)
-    max_ds.fill(-np.inf)
-
-    for file in os.listdir(f"{lstpath}/{date}"):      
-        file_path = os.path.join(f"{lstpath}/{date}", file)
-        if os.path.isfile(file_path):
-            process_file(file_path)     
-
-    avg_ds = np.divide(sum_ds, count_ds, out=np.full_like(sum_ds, np.nan), where=count_ds!=0)
-
-    day_ds = [avg_ds, min_ds, max_ds]
-
-    np.savez(f"{destpath}/{date}.npz", avg=avg_ds, min=min_ds, max=max_ds)
-    logging.info(f"Saved LST data at {destpath}/{date}.npz")
-
+aggregated_list = []
 def main():   
     parser = argparse.ArgumentParser(description="Calculate LST data for a date range, saving NP arrays")
     parser.add_argument("start", help="Date start in yyyymmdd format")
@@ -87,8 +89,11 @@ def main():
     while current_date <= end_date:
         logging.info(f"Calculating LST for {current_date.strftime('%Y%m%d')}")
 
-        calculate_min_max_avg_lst(current_date.strftime('%Y%m%d'), args.lstpath, args.destpath)    
+        calculate_min_max_avg_lst(current_date.strftime('%Y%m%d'), args.lstpath)    
         current_date += timedelta(days=1)
+    
+    final_df = pd.concat(aggregated_list, ignore_index=True)
+    final_df.to_parquet(args.destpath+'/lst.parquet', index=False)
 
 if __name__ == "__main__":
     main()

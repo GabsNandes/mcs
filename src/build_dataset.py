@@ -1,283 +1,247 @@
 import pandas as pd
-import numpy as np
-from utils.find_closest_lat_lon import find_closest_lat_lon
-from utils.reproject_lats_lons import reproject_lats_lons
-from tqdm import tqdm
 from scipy.spatial import cKDTree
+import numpy as np
 import argparse
 import logging
-import os
 
-def find_closest_station(lat, lon, station_coords):
-    tree = cKDTree(station_coords)
-    distance, index = tree.query((lat, lon))
-    return index
+def find_nearest(lat, lon, tree, coords):
+    dist, idx = tree.query([[lat, lon]], k=1)
+    return coords[idx[0]]
 
-def truncate(value, decimals):
-    if decimals == -1:
-        return value
-    factor = 10 ** decimals
-    return np.floor(value * factor) / factor
-
-def clean_sinan_dataset(sinan_df, cnes_df):
-    if 'count' in sinan_df.columns:
-        sinan_df.rename(columns={'count': 'CASES'}, inplace=True)
-
-    sinan_df['acc_sat'] = np.nan
-    sinan_df['avg_sat'] = np.nan
-    sinan_df['max_sat'] = np.nan
-    sinan_df['min_sat'] = np.nan
-
-    sinan_df['acc_ws'] = np.nan    
-    sinan_df['avg_ws'] = np.nan
-    sinan_df['max_ws'] = np.nan
-    sinan_df['min_ws'] = np.nan
-
-    derived_columns_ws = [
-        'temp_mov_7d_ws', 'temp_mov_14d_ws', 'temp_mov_30d_ws', 
-        'prec_mov_7d_ws', 'prec_mov_14d_ws', 'prec_mov_30d_ws', 
-        'prec_acum_7d_ws', 'prec_acum_14d_ws', 'prec_acum_30d_ws',
-        'amp_termica_ws', 'temp_ideal_ws','temp_extrema_ws', 
-        'prec_significativa_ws', 'prec_extrema_ws',
-    ]
-
-    derived_columns_sat = [
-        'temp_mov_7d_sat', 'temp_mov_14d_sat', 'temp_mov_30d_sat', 
-        'prec_mov_7d_sat', 'prec_mov_14d_sat', 'prec_mov_30d_sat', 
-        'prec_acum_7d_sat', 'prec_acum_14d_sat', 'prec_acum_30d_sat',
-        'amp_termica_sat', 'temp_ideal_sat','temp_extrema_sat', 
-        'prec_significativa_sat', 'prec_extrema_sat',
-    ]    
-
-    for col in derived_columns_ws:
-        sinan_df[col] = np.nan
-
-    for col in derived_columns_sat:
-        sinan_df[col] = np.nan          
+def build_dataset(sinan_path, cnes_path, inmet_path, lst_path, rrqpe_path, output_path, start_date=None, end_date=None):
+    # Configurar logging
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
     
-    sinan_df['ID_UNIDADE'] = sinan_df['ID_UNIDADE'].str.strip()
-    
-    sinan_df = sinan_df[sinan_df['ID_UNIDADE'] != '']
-    
-    valid_ids = set(cnes_df['CNES'])
-    
-    sinan_df = sinan_df[sinan_df['ID_UNIDADE'].isin(valid_ids)]
-    return sinan_df
-
-def build_dataset(sinan_path, cnes_path, lst_reference_file, rrqpe_reference_file, inmet_path, output_path):
+    # Carregar os datasets dos arquivos Parquet
+    logging.info("Carregando os datasets...")
     sinan_df = pd.read_parquet(sinan_path)
     cnes_df = pd.read_parquet(cnes_path)
     inmet_df = pd.read_parquet(inmet_path)
-    inmet_df['VL_LATITUDE'] = inmet_df['VL_LATITUDE'].astype(float)
-    inmet_df['VL_LONGITUDE'] = inmet_df['VL_LONGITUDE'].astype(float)
+    lst_df = pd.read_parquet(lst_path)
+    rrqpe_df = pd.read_parquet(rrqpe_path)
+    
+    logging.debug(f"sinan_df shape: {sinan_df.shape}")
+    logging.debug(f"cnes_df shape: {cnes_df.shape}")
+    logging.debug(f"inmet_df shape: {inmet_df.shape}")
+    logging.debug(f"lst_df shape: {lst_df.shape}")
+    logging.debug(f"rrqpe_df shape: {rrqpe_df.shape}")
+
+    # Converter campos de data para datetime
+    logging.info("Convertendo campos de data para datetime...")
+    sinan_df['DT_NOTIFIC'] = pd.to_datetime(sinan_df['DT_NOTIFIC'], format='%Y%m%d')
     inmet_df['DT_MEDICAO'] = pd.to_datetime(inmet_df['DT_MEDICAO'], format='%Y-%m-%d')
+    lst_df['date'] = pd.to_datetime(lst_df['date'], format='%Y%m%d')
+    rrqpe_df['date'] = pd.to_datetime(rrqpe_df['date'], format='%Y%m%d')
 
-    lst_lons, lst_lats = reproject_lats_lons(lst_reference_file) 
-    rrqpe_lons, rrqpe_lats = reproject_lats_lons(rrqpe_reference_file) 
+    # Converter ID_UNIDADE para string
+    sinan_df['ID_UNIDADE'] = sinan_df['ID_UNIDADE'].astype(str)
+    cnes_df['CNES'] = cnes_df['CNES'].astype(str)
 
-    sinan_df = clean_sinan_dataset(sinan_df, cnes_df)
+    # Filtrar sinan_df para considerar apenas ID_UNIDADE '2296306'
+    #logging.info("Filtrando sinan_df para ID_UNIDADE '2296306'...")
+    #sinan_df = sinan_df[sinan_df['ID_UNIDADE'] == '2296306']
+    #logging.debug(f"sinan_df shape after filtering: {sinan_df.shape}")
 
+    # Processar sinan_df
+    logging.info("Processando sinan_df...")
+    sinan_df.dropna(subset=['ID_UNIDADE'], inplace=True)
+    logging.debug(f"sinan_df shape after processing: {sinan_df.shape}")
+
+    # Processar cnes_df
+    logging.info("Processando cnes_df...")
+    cnes_df = cnes_df[cnes_df['CNES'].isin(sinan_df['ID_UNIDADE'])]
+    cnes_df.rename(columns={'CNES': 'ID_UNIDADE'}, inplace=True)
+    cnes_df['LAT'] = pd.to_numeric(cnes_df['LAT'], errors='coerce')
+    cnes_df['LNG'] = pd.to_numeric(cnes_df['LNG'], errors='coerce')
     cnes_df.dropna(subset=['LAT', 'LNG'], inplace=True)
+    logging.debug(f"cnes_df shape after processing: {cnes_df.shape}")
 
-    id_unit_to_lat_lon = cnes_df.set_index('CNES')[['LAT', 'LNG']].to_dict('index')
+    # Mesclar SINAN com CNES para adicionar lat/lng
+    logging.info("Mesclando sinan_df com cnes_df...")
+    sinan_df = pd.merge(sinan_df, cnes_df[['ID_UNIDADE', 'LAT', 'LNG']], on='ID_UNIDADE', how='left')
+    sinan_df.dropna(subset=['LAT', 'LNG'], inplace=True)
+    logging.debug(f"sinan_df shape after merging with cnes_df: {sinan_df.shape}")
 
-    lst_lat_lon_cache = {}
-    rrqpe_lat_lon_cache = {}
+    # Renomear colunas
+    logging.info("Renomeando colunas...")
+    inmet_df.rename(columns={
+        'TEM_MIN': 'TEM_MIN_INMET',
+        'TEM_MAX': 'TEM_MAX_INMET',
+        'TEM_AVG': 'TEM_AVG_INMET',
+        'CHUVA': 'CHUVA_INMET'
+    }, inplace=True)
 
-    station_coords = inmet_df[['VL_LATITUDE', 'VL_LONGITUDE']].values
+    lst_df.rename(columns={
+        'LST_AVG': 'TEM_AVG_SAT',
+        'LST_MIN': 'TEM_MIN_SAT',
+        'LST_MAX': 'TEM_MAX_SAT'
+    }, inplace=True)
 
-    for index, row in tqdm(sinan_df.iterrows(), total=sinan_df.shape[0], desc="Processing rows"):
-        id_unidade = row['ID_UNIDADE']
-        if id_unidade not in lst_lat_lon_cache:
-            lat_lon = id_unit_to_lat_lon.get(id_unidade)
-            if lat_lon:
-                lat, lon = lat_lon['LAT'], lat_lon['LNG']
-                lst_x, lst_y = find_closest_lat_lon(lat, lon, lst_lats, lst_lons)
-                rrqpe_x, rrqpe_y = find_closest_lat_lon(lat, lon, rrqpe_lats, rrqpe_lons)                
-                lst_lat_lon_cache[id_unidade] = (lst_x, lst_y)
-                rrqpe_lat_lon_cache[id_unidade] = (rrqpe_x, rrqpe_y)
-            else:
-                continue
-        else:
-            lst_x, lst_y = lst_lat_lon_cache[id_unidade]
-            rrqpe_x, rrqpe_y = rrqpe_lat_lon_cache[id_unidade]
+    rrqpe_df.rename(columns={
+        'RRQPE_SUM': 'CHUVA_SAT'
+    }, inplace=True)
 
-        dt_notific = row['DT_NOTIFIC']
-        dt_notific_date = pd.to_datetime(dt_notific, format='%Y%m%d')
+    # Criar árvores k-d para busca rápida
+    logging.info("Criando árvores k-d para busca rápida...")
+    inmet_coords = inmet_df[['VL_LATITUDE', 'VL_LONGITUDE']].values
+    lst_coords = lst_df[['latitude', 'longitude']].values
+    rrqpe_coords = rrqpe_df[['latitude', 'longitude']].values
 
-        lst_datasets_path = 'data/processed/lst'
-        if os.path.isfile(f'{lst_datasets_path}/{dt_notific}.npz'):
-            lst_data = np.load(f'{lst_datasets_path}/{dt_notific}.npz')
-        else:
-            continue
+    tree_inmet = cKDTree(inmet_coords)
+    tree_lst = cKDTree(lst_coords)
+    tree_rrqpe = cKDTree(rrqpe_coords)
 
-        rrqpe_datasets_path = 'data/processed/rrqpe'
-        if os.path.isfile(f'{rrqpe_datasets_path}/{dt_notific}.npz'):
-            rrqpe_data = np.load(f'{rrqpe_datasets_path}/{dt_notific}.npz')
-        else:
-            continue        
+    # Encontrar a estação meteorológica mais próxima de cada unidade de saúde
+    logging.info("Encontrando a estação meteorológica mais próxima...")
+    nearest_inmet = np.apply_along_axis(lambda x: find_nearest(x[0], x[1], tree_inmet, inmet_coords), 1, sinan_df[['LAT', 'LNG']].values)
+    nearest_lst = np.apply_along_axis(lambda x: find_nearest(x[0], x[1], tree_lst, lst_coords), 1, sinan_df[['LAT', 'LNG']].values)
+    nearest_rrqpe = np.apply_along_axis(lambda x: find_nearest(x[0], x[1], tree_rrqpe, rrqpe_coords), 1, sinan_df[['LAT', 'LNG']].values)
 
-        sinan_df.at[index, 'avg_sat'] = truncate(lst_data['avg'][lst_x, lst_y], 2)
-        sinan_df.at[index, 'max_sat'] = truncate(lst_data['max'][lst_x, lst_y], 2)
-        sinan_df.at[index, 'min_sat'] = truncate(lst_data['min'][lst_x, lst_y], 2)
-        sinan_df.at[index, 'acc_sat'] = truncate(rrqpe_data['acum'][rrqpe_x, rrqpe_y], 2)
+    # Adicionar as coordenadas mais próximas aos dados
+    sinan_df['closest_LAT_INMET'] = nearest_inmet[:, 0]
+    sinan_df['closest_LNG_INMET'] = nearest_inmet[:, 1]
+    sinan_df['closest_LAT_SAT'] = nearest_lst[:, 0]
+    sinan_df['closest_LNG_SAT'] = nearest_lst[:, 1]
+    sinan_df['closest_LAT_RAIN_SAT'] = nearest_rrqpe[:, 0]
+    sinan_df['closest_LNG_RAIN_SAT'] = nearest_rrqpe[:, 1]
 
-        for days in [7, 14, 30]:
-            temp_sum = []
-            prec_sum = []
-            for delta in range(days):
-                current_date = dt_notific_date - pd.Timedelta(days=delta)
-                current_date_str = current_date.strftime('%Y%m%d')
-                
-                if os.path.isfile(f'{lst_datasets_path}/{current_date_str}.npz'):
-                    lst_data = np.load(f'{lst_datasets_path}/{current_date_str}.npz')
-                    temp_sum.append(lst_data['avg'][lst_x, lst_y])
-                
-                if os.path.isfile(f'{rrqpe_datasets_path}/{current_date_str}.npz'):
-                    rrqpe_data = np.load(f'{rrqpe_datasets_path}/{current_date_str}.npz')
-                    prec_sum.append(rrqpe_data['acum'][rrqpe_x, rrqpe_y])
-            
-            if temp_sum:
-                sinan_df.at[index, f'temp_mov_{days}d_sat'] = truncate(np.mean(temp_sum), 2)
-            if prec_sum:
-                sinan_df.at[index, f'prec_mov_{days}d_sat'] = truncate(np.mean(prec_sum), 2)
-                sinan_df.at[index, f'prec_acum_{days}d_sat'] = truncate(np.sum(prec_sum), 2)
-        
-        # Calculate thermal amplitude for satellite data
-        sinan_df.at[index, 'amp_termica_sat'] = truncate(sinan_df.at[index, 'max_sat'] - sinan_df.at[index, 'min_sat'], 2)
-        
-        # Optimal Temperature for satellite data
-        sinan_df.at[index, 'temp_ideal_sat'] = 1 if 21 <= sinan_df.at[index, 'avg_sat'] <= 27 else 0
+    # Mesclar com dados do INMET
+    logging.info("Mesclando sinan_df com inmet_df...")
+    sinan_df = pd.merge(sinan_df, inmet_df, left_on=['closest_LAT_INMET', 'closest_LNG_INMET', 'DT_NOTIFIC'], right_on=['VL_LATITUDE', 'VL_LONGITUDE', 'DT_MEDICAO'], how='left')
+    logging.debug(f"sinan_df shape after merging with inmet_df: {sinan_df.shape}")
 
-        # Extreme Temperature for satellite data
-        sinan_df.at[index, 'temp_extrema_sat'] = 1 if sinan_df.at[index, 'avg_sat'] <= 14 or sinan_df.at[index, 'avg_sat'] >= 38 else 0
+    # Mesclar com dados do LST
+    logging.info("Mesclando sinan_df com lst_df...")
+    sinan_df = pd.merge(sinan_df, lst_df, left_on=['closest_LAT_SAT', 'closest_LNG_SAT', 'DT_NOTIFIC'], right_on=['latitude', 'longitude', 'date'], how='left')
+    logging.debug(f"sinan_df shape after merging with lst_df: {sinan_df.shape}")
 
-        # Significant Rainfall for satellite data
-        sinan_df.at[index, 'prec_significativa_sat'] = 1 if 10 <= sinan_df.at[index, 'acc_sat'] <= 150 else 0
+    # Mesclar com dados do RRQPE
+    logging.info("Mesclando sinan_df com rrqpe_df...")
+    sinan_df = pd.merge(sinan_df, rrqpe_df, left_on=['closest_LAT_RAIN_SAT', 'closest_LNG_RAIN_SAT', 'DT_NOTIFIC'], right_on=['latitude', 'longitude', 'date'], how='left')
+    logging.debug(f"sinan_df shape after merging with rrqpe_df: {sinan_df.shape}")
 
-        # Extreme Rainfall for satellite data
-        sinan_df.at[index, 'prec_extrema_sat'] = 1 if sinan_df.at[index, 'acc_sat'] >= 150 else 0
+    # Criar features de temperatura e precipitação
+    logging.info("Criando features...")
 
-        # Find the closest weather station
-        station_idx = find_closest_station(float(lat), float(lon), station_coords)
-        station = inmet_df.iloc[station_idx]
+    # Temperatura ideal e extrema
+    sinan_df['IDEAL_TEMP_INMET'] = sinan_df['TEM_AVG_INMET'].apply(lambda x: 1 if 21 <= x <= 27 else 0)
+    sinan_df['EXTREME_TEMP_INMET'] = sinan_df['TEM_AVG_INMET'].apply(lambda x: 1 if x <= 14 or x >= 38 else 0)
+    sinan_df['IDEAL_TEMP_SAT'] = sinan_df['TEM_AVG_SAT'].apply(lambda x: 1 if 21 <= x <= 27 else 0)
+    sinan_df['EXTREME_TEMP_SAT'] = sinan_df['TEM_AVG_SAT'].apply(lambda x: 1 if x <= 14 or x >= 38 else 0)
 
-        # Filter the inmet_df by date
-        inmet_row = inmet_df[(inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & (inmet_df['DT_MEDICAO'] == dt_notific_date)]
-        if not inmet_row.empty:
-            sinan_df.at[index, 'acc_ws'] = truncate(inmet_row['CHUVA'].values[0], 2)
-            sinan_df.at[index, 'avg_ws'] = truncate(inmet_row['TEM_AVG'].values[0], 2)
-            sinan_df.at[index, 'max_ws'] = truncate(inmet_row['TEM_MAX'].values[0], 2)
-            sinan_df.at[index, 'min_ws'] = truncate(inmet_row['TEM_MIN'].values[0], 2)
-            
-            # Calculate moving averages for temperature
-            sinan_df.at[index, 'temp_mov_7d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) &
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
-            ]['TEM_AVG'].mean()
-            sinan_df.at[index, 'temp_mov_14d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
-            ]['TEM_AVG'].mean()
-            sinan_df.at[index, 'temp_mov_30d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
-            ]['TEM_AVG'].mean()
+    # Precipitação significativa e extrema
+    sinan_df['SIGNIFICANT_RAIN_INMET'] = sinan_df['CHUVA_INMET'].apply(lambda x: 1 if 10 <= x < 150 else 0)
+    sinan_df['EXTREME_RAIN_INMET'] = sinan_df['CHUVA_INMET'].apply(lambda x: 1 if x >= 150 else 0)
+    sinan_df['SIGNIFICANT_RAIN_SAT'] = sinan_df['CHUVA_SAT'].apply(lambda x: 1 if 10 <= x < 150 else 0)
+    sinan_df['EXTREME_RAIN_SAT'] = sinan_df['CHUVA_SAT'].apply(lambda x: 1 if x >= 150 else 0)
 
-            # Calculate moving averages for precipitation
-            sinan_df.at[index, 'prec_mov_7d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
-            ]['CHUVA'].mean()
-            sinan_df.at[index, 'prec_mov_14d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
-            ]['CHUVA'].mean()
-            sinan_df.at[index, 'prec_mov_30d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
-            ]['CHUVA'].mean()            
+    # Amplitude térmica
+    sinan_df['TEMP_RANGE_INMET'] = sinan_df['TEM_MAX_INMET'] - sinan_df['TEM_MIN_INMET']
+    sinan_df['TEMP_RANGE_SAT'] = sinan_df['TEM_MAX_SAT'] - sinan_df['TEM_MIN_SAT']
 
-            # Acc Precipitation calculations
-            sinan_df.at[index, 'prec_acum_7d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=7))
-            ]['CHUVA'].sum()
-            sinan_df.at[index, 'prec_acum_14d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=14))
-            ]['CHUVA'].sum()
-            sinan_df.at[index, 'prec_acum_30d_ws'] = inmet_df[
-                (inmet_df['CD_ESTACAO'] == station['CD_ESTACAO']) & 
-                (inmet_df['DT_MEDICAO'] <= dt_notific_date) & 
-                (inmet_df['DT_MEDICAO'] >= dt_notific_date - pd.Timedelta(days=30))
-            ]['CHUVA'].sum()
+    # Médias móveis e acumulados de temperatura e precipitação
+    windows = [7, 14, 21]
+    for window in windows:
+        sinan_df[f'TEM_AVG_INMET_MM_{window}'] = sinan_df['TEM_AVG_INMET'].rolling(window=window).mean()
+        sinan_df[f'CHUVA_INMET_MM_{window}'] = sinan_df['CHUVA_INMET'].rolling(window=window).mean()
+        sinan_df[f'TEMP_RANGE_INMET_MM_{window}'] = sinan_df['TEMP_RANGE_INMET'].rolling(window=window).mean()
+        sinan_df[f'TEM_AVG_SAT_MM_{window}'] = sinan_df['TEM_AVG_SAT'].rolling(window=window).mean()
+        sinan_df[f'CHUVA_SAT_MM_{window}'] = sinan_df['CHUVA_SAT'].rolling(window=window).mean()
+        sinan_df[f'TEMP_RANGE_SAT_MM_{window}'] = sinan_df['TEMP_RANGE_SAT'].rolling(window=window).mean()
+        sinan_df[f'TEM_AVG_INMET_ACC_{window}'] = sinan_df['TEM_AVG_INMET'].rolling(window=window).sum()
+        sinan_df[f'CHUVA_INMET_ACC_{window}'] = sinan_df['CHUVA_INMET'].rolling(window=window).sum()
+        sinan_df[f'TEM_AVG_SAT_ACC_{window}'] = sinan_df['TEM_AVG_SAT'].rolling(window=window).sum()
+        sinan_df[f'CHUVA_SAT_ACC_{window}'] = sinan_df['CHUVA_SAT'].rolling(window=window).sum()
 
-            # Info found on Reinhold et Al - Effects of the Environmental Temperature on Aedes aegypti and Aedes albopictus Mosquitoes: A Review
+    # Criar features de casos de dengue
+    sinan_df['CASES_MM_14'] = sinan_df['CASES'].rolling(window=14).mean()
+    sinan_df['CASES_MM_21'] = sinan_df['CASES'].rolling(window=21).mean()
+    sinan_df['CASES_ACC_14'] = sinan_df['CASES'].rolling(window=14).sum()
+    sinan_df['CASES_ACC_21'] = sinan_df['CASES'].rolling(window=21).sum()
 
-            # Thermal Range
-            sinan_df.at[index, 'amp_termica_ws'] = truncate(inmet_row['TEM_MAX'].values[0] - inmet_row['TEM_MIN'].values[0], 2)
-            
-            # Optimal Temperature
-            sinan_df.at[index, 'temp_ideal_ws'] = 1 if inmet_row['TEM_AVG'].values[0] >= 21 and inmet_row['TEM_AVG'].values[0] <= 27 else 0
+    # Selecionar as colunas necessárias
+    logging.info("Selecionando as colunas necessárias...")
+    selected_columns = [
+        'ID_UNIDADE', 'DT_NOTIFIC', 'LAT', 'LNG', 'closest_LAT_INMET', 'closest_LNG_INMET', 'closest_LAT_SAT', 'closest_LNG_SAT', 'closest_LAT_RAIN_SAT', 'closest_LNG_RAIN_SAT',
+        'TEM_MIN_INMET', 'TEM_MAX_INMET', 'TEM_AVG_INMET', 'CHUVA_INMET',
+        'TEM_AVG_SAT', 'TEM_MIN_SAT', 'TEM_MAX_SAT', 'CHUVA_SAT',
+        'IDEAL_TEMP_INMET', 'EXTREME_TEMP_INMET', 'SIGNIFICANT_RAIN_INMET', 'EXTREME_RAIN_INMET',
+        'IDEAL_TEMP_SAT', 'EXTREME_TEMP_SAT', 'SIGNIFICANT_RAIN_SAT', 'EXTREME_RAIN_SAT',
+        'TEMP_RANGE_INMET', 'TEMP_RANGE_SAT',
+        'CASES', 'CASES_MM_14', 'CASES_MM_21', 'CASES_ACC_14', 'CASES_ACC_21'
+    ] + [
+        f'TEM_AVG_INMET_MM_{window}' for window in windows
+    ] + [
+        f'CHUVA_INMET_MM_{window}' for window in windows
+    ] + [
+        f'TEMP_RANGE_INMET_MM_{window}' for window in windows
+    ] + [
+        f'TEM_AVG_SAT_MM_{window}' for window in windows
+    ] + [
+        f'CHUVA_SAT_MM_{window}' for window in windows
+    ] + [
+        f'TEMP_RANGE_SAT_MM_{window}' for window in windows
+    ] + [
+        f'TEM_AVG_INMET_ACC_{window}' for window in windows
+    ] + [
+        f'CHUVA_INMET_ACC_{window}' for window in windows
+    ] + [
+        f'TEM_AVG_SAT_ACC_{window}' for window in windows
+    ] + [
+        f'CHUVA_SAT_ACC_{window}' for window in windows
+    ]
 
-            # Harmful Temperature
-            sinan_df.at[index, 'temp_extrema_ws'] = 1 if inmet_row['TEM_AVG'].values[0] <= 14 and inmet_row['TEM_AVG'].values[0] >= 38 else 0
+    final_df = sinan_df[selected_columns]
+    logging.debug(f"final_df shape after selecting columns: {final_df.shape}")
 
-            # Harmful Rainfall
-            sinan_df.at[index, 'prec_significativa_ws'] = 1 if inmet_row['CHUVA'].values[0] >= 10 and inmet_row['CHUVA'].values[0] <= 150 else 0
+    # Filtrar por data de início e fim, se fornecidas
+    if start_date:
+        logging.info(f"Filtrando por data de início: {start_date}")
+        final_df = final_df[final_df['DT_NOTIFIC'] >= pd.to_datetime(start_date)]
+    if end_date:
+        logging.info(f"Filtrando por data de fim: {end_date}")
+        final_df = final_df[final_df['DT_NOTIFIC'] <= pd.to_datetime(end_date)]
+    logging.debug(f"final_df shape after date filtering: {final_df.shape}")
 
-            # Harmful Rainfall
-            sinan_df.at[index, 'prec_extrema_ws'] = 1 if inmet_row['CHUVA'].values[0] >= 150 else 0            
-
-    # Additional cleaning steps
-    # Drop the ID_AGRAVO column if it exists
-    if 'ID_AGRAVO' in sinan_df.columns:
-        sinan_df = sinan_df.drop(columns=['ID_AGRAVO'])           
-
-    # Drop unnamed columns
-    sinan_df = sinan_df.loc[:, ~sinan_df.columns.str.contains('^Unnamed')]
-
-    # Convert the date column to datetime format and sort by date
-    sinan_df['DT_NOTIFIC'] = pd.to_datetime(sinan_df['DT_NOTIFIC'], format='%Y%m%d', errors='coerce')
-    sinan_df = sinan_df.dropna(subset=['DT_NOTIFIC'])  # Drop rows where date conversion failed
-    sinan_df = sinan_df.sort_values('DT_NOTIFIC')
-
-    # Check for NaN or infinite values and drop rows containing them
-    sinan_df = sinan_df.replace([np.inf, -np.inf], np.nan)
-    #sinan_df = sinan_df.dropna()
-
-    # Drop rows where avg_sat, max_sat, min_sat, avg_ws, max_ws, min_ws have no value
-    sinan_df = sinan_df.dropna(subset=['acc_sat', 'avg_sat', 'max_sat', 'min_sat', 'acc_ws','avg_ws', 'max_ws', 'min_ws'])
-
-    sinan_df.to_parquet(output_path)
-
-    sinan_df.to_csv('teste.csv')
+    # Salvar o dataset final como um arquivo Parquet
+    logging.info(f"Salvando o dataset final em {output_path}")
+    final_df.to_parquet(output_path, index=False)
+    logging.info(f"Dataset com features salvo em {output_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Unify INMET datasets")
+    parser = argparse.ArgumentParser(description="Build dataset with features")
     parser.add_argument("sinan_path", help="Path to SINAN data")
     parser.add_argument("cnes_path", help="Path to CNES data")
-    parser.add_argument("lst_reference_file", help="Path to LST data, for reference")
-    parser.add_argument("rrqpe_reference_file", help="Path to RRQPE data, for reference")
     parser.add_argument("inmet_path", help="Path to INMET data")
-    parser.add_argument("output_path", help="Output path")    
-    parser.add_argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
-    
+    parser.add_argument("lst_path", help="Path to temperature data")
+    parser.add.argument("rrqpe_path", help="Path to rainfall data")
+    parser.add.argument("output_path", help="Output path")
+    parser.add.argument("--start_date", help="Start date for filtering (YYYY-MM-DD)", default=None)
+    parser.add.argument("--end_date", help="End date for filtering (YYYY-MM-DD)", default=None)
+    parser.add.argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
+
     args = parser.parse_args()
-    
-    logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s - %(levelname)s - %(message)s")
-    
-    build_dataset(args.sinan_path, args.cnes_path, args.lst_reference_file, args.rrqpe_reference_file, args.inmet_path, args.output_path)
-    #build_dataset('data/processed/sinan/DENG.parquet', 'data/processed/cnes/STRJ2401.parquet', 'data/raw/lst/ref.nc', 'data/raw/rrqpe/ref.nc', 'data/processed/inmet/aggregated.parquet', 'data/processed/sinan/sinan.parquet')
+
+    build_dataset(
+        sinan_path=args.sinan_path,
+        cnes_path=args.cnes_path,
+        inmet_path=args.inmet_path,
+        lst_path=args.lst_path,
+        rrqpe_path=args.rrqpe_path,
+        output_path=args.output_path,
+        start_date=args.start_date,
+        end_date=args.end_date
+    )
 
 if __name__ == "__main__":
-    main()
+    #main()
+    build_dataset(
+        sinan_path="data/processed/sinan/DENG.parquet",
+        cnes_path="data/processed/cnes/STRJ2401.parquet",
+        inmet_path="data/processed/inmet/aggregated.parquet",
+        lst_path="data/processed/lst/lst.parquet",
+        rrqpe_path="data/processed/rrqpe/rrqpe.parquet",
+        output_path="data/processed/sinan/sinan.parquet",
+        start_date="2020-01-01",
+        end_date="2023-12-31"
+    )
