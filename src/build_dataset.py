@@ -120,6 +120,11 @@ def build_dataset(sinan_path, cnes_path, inmet_path, lst_path, rrqpe_path, outpu
     sinan_df = pd.merge(sinan_df, rrqpe_df, left_on=['closest_LAT_RAIN_SAT', 'closest_LNG_RAIN_SAT', 'DT_NOTIFIC'], right_on=['latitude', 'longitude', 'date'], how='left')
     logging.debug(f"sinan_df shape after merging with rrqpe_df: {sinan_df.shape}")
 
+    # Interpolação para preencher buracos
+    logging.info("Interpolando buracos nos dados...")
+    sinan_df[['TEM_AVG_SAT', 'TEM_MIN_SAT', 'TEM_MAX_SAT', 'CHUVA_SAT']] = sinan_df[['TEM_AVG_SAT', 'TEM_MIN_SAT', 'TEM_MAX_SAT', 'CHUVA_SAT']].interpolate(method='linear', limit_direction='both')
+    sinan_df[['TEM_AVG_INMET', 'TEM_MIN_INMET', 'TEM_MAX_INMET', 'CHUVA_INMET']] = sinan_df[['TEM_AVG_INMET', 'TEM_MIN_INMET', 'TEM_MAX_INMET', 'CHUVA_INMET']].interpolate(method='linear', limit_direction='both')
+
     # Criar features de temperatura e precipitação
     logging.info("Criando features...")
 
@@ -214,11 +219,11 @@ def main():
     parser.add_argument("cnes_path", help="Path to CNES data")
     parser.add_argument("inmet_path", help="Path to INMET data")
     parser.add_argument("lst_path", help="Path to temperature data")
-    parser.add.argument("rrqpe_path", help="Path to rainfall data")
-    parser.add.argument("output_path", help="Output path")
-    parser.add.argument("--start_date", help="Start date for filtering (YYYY-MM-DD)", default=None)
-    parser.add.argument("--end_date", help="End date for filtering (YYYY-MM-DD)", default=None)
-    parser.add.argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
+    parser.add_argument("rrqpe_path", help="Path to rainfall data")
+    parser.add_argument("output_path", help="Output path")
+    parser.add_argument("--start_date", help="Start date for filtering (YYYY-MM-DD)", default=None)
+    parser.add_argument("--end_date", help="End date for filtering (YYYY-MM-DD)", default=None)
+    parser.add_argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
 
     args = parser.parse_args()
 
