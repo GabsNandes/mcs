@@ -19,9 +19,9 @@ def unify_sinan(input_path, output_path):
    
     df_concat = pd.concat(dfs, ignore_index=True)
     
-    df_concat.to_parquet(os.path.join(output_path, 'concat.parquet'))
+    df_concat.to_parquet(os.path.join(output_path, 'concat.parquet')) #TODO: Move the file name to args
 
-    logging.info(f"Saved concatenated inmet file at: {output_path}/concat.parquet")
+    logging.info(f"Saved concatenated inmet file at: {output_path}/concat.parquet") #TODO: Move the file name to args
 
 def main():
     parser = argparse.ArgumentParser(description="Unify SINAN datasets")

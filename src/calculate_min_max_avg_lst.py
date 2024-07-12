@@ -130,7 +130,7 @@ def main():
         current_date += timedelta(days=1)
 
     final_df = pd.concat(aggregated_list, ignore_index=True)
-    final_df.to_parquet(args.destpath+'/lst.parquet', index=False)
+    final_df.to_parquet(args.destpath+'/lst.parquet', index=False) #TODO: Move the file name to args
 
 if __name__ == "__main__":
     main()

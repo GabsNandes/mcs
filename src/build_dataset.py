@@ -239,14 +239,14 @@ def main():
     )
 
 if __name__ == "__main__":
-    #main()
-    build_dataset(
-        sinan_path="data/processed/sinan/DENG.parquet",
-        cnes_path="data/processed/cnes/STRJ2401.parquet",
-        inmet_path="data/processed/inmet/aggregated.parquet",
-        lst_path="data/processed/lst/lst.parquet",
-        rrqpe_path="data/processed/rrqpe/rrqpe.parquet",
-        output_path="data/processed/sinan/sinan.parquet",
-        start_date="2020-01-01",
-        end_date="2023-12-31"
-    )
+    main()
+    # build_dataset(
+    #     sinan_path="data/processed/sinan/DENG.parquet",
+    #     cnes_path="data/processed/cnes/STRJ2401.parquet",
+    #     inmet_path="data/processed/inmet/aggregated.parquet",
+    #     lst_path="data/processed/lst/lst.parquet",
+    #     rrqpe_path="data/processed/rrqpe/rrqpe.parquet",
+    #     output_path="data/processed/sinan/sinan.parquet",
+    #     start_date="2020-01-01",
+    #     end_date="2023-12-31"
+    # )

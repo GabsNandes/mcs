@@ -206,10 +206,10 @@ def main():
     train(args.dataset_path, args.output_path, args.split_date, args.id_unidade)
 
 if __name__ == '__main__':
-    #main()
-    train(
-        dataset_path="data/processed/sinan/sinan.parquet",
-        output_path="data/processed/lstm",
-        split_date="2022-12-31",
-        id_unidade="2296306",
-    )
+    main()
+    #train(
+    #    dataset_path="data/processed/sinan/sinan.parquet",
+    #    output_path="data/processed/lstm",
+    #    split_date="2022-12-31",
+    #    id_unidade="2296306",
+    #)

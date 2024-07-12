@@ -35,18 +35,18 @@ def unify_inmet(raw_inmet_path, processed_inmet_path, aggregated):
         }).reset_index()
         df_aggregated.columns = ['CD_ESTACAO', 'DT_MEDICAO', 'TEM_MIN', 'TEM_MAX', 'TEM_AVG', 'CHUVA', 'VL_LATITUDE', 'VL_LONGITUDE']
 
-        logging.info(f"Saved aggregated inmet file at: {processed_inmet_path}/aggregated.parquet")
+        logging.info(f"Saved aggregated inmet file at: {processed_inmet_path}/aggregated.parquet") #TODO: Move the file name to args
 
-        df_aggregated.to_parquet(os.path.join(processed_inmet_path, 'aggregated.parquet'))   
+        df_aggregated.to_parquet(os.path.join(processed_inmet_path, 'aggregated.parquet')) #TODO: Move the file name to args
     else:
         df_concat.to_parquet(os.path.join(processed_inmet_path, 'concat.parquet'))
-        logging.info(f"Saved concatenated inmet file at: {processed_inmet_path}/concat.parquet")
+        logging.info(f"Saved concatenated inmet file at: {processed_inmet_path}/concat.parquet") #TODO: Move the file name to args
 
 def main():
     parser = argparse.ArgumentParser(description="Unify INMET datasets")
     parser.add_argument("raw_inmet_path", help="Path to INMET data")
     parser.add_argument("processed_inmet_path", help="Output path")
-    parser.add_argument("--aggregated", dest="aggregated", type=bool, nargs='?', const=True, default=False, help="Set if the output will be aggregated")
+    parser.add_argument("--aggregated", dest="aggregated", type=bool, nargs='?', const=True, default=False, help="Set if the output will be aggregated") #TODO: Use a simpler flag, like on extract_sinan_cases
     parser.add_argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
     
     args = parser.parse_args()

@@ -1,6 +1,3 @@
-# Activate env
-#conda activate arboseer
-
 # Download and process CNES Health Units data - OK
 #python src/utils/download_cnes_file.py ST RJ 2401 data/raw/cnes/STRJ2401.dbc
 #python src/utils/dbc_to_parquet.py data/raw/cnes/STRJ2401.dbc data/raw/cnes/STRJ2401.parquet
@@ -68,9 +65,6 @@
 
 # Download and Calculate RRQPE - OK
 #python src/calculate_accumulated_rrqpe.py 20191130 20231231 data/raw/rrqpe data/processed/rrqpe
-#python src/calculate_accumulated_rrqpe.py 20210101 20211231 data/raw/rrqpe data/processed/rrqpe/20211231.parquet
-#python src/calculate_accumulated_rrqpe.py 20220101 20221231 data/raw/rrqpe data/processed/rrqpe/20221231.parquet
-#python src/calculate_accumulated_rrqpe.py 20230101 20231231 data/raw/rrqpe data/processed/rrqpe/20231231.parquet
 
 # Build
 #python src/build_dataset.py data/processed/sinan/DENG.parquet data/processed/cnes/STRJ2401.parquet data/processed/inmet/aggregated.parquet data/processed/lst/lst.parquet data/processed/rrqpe/rrqpe.parquet data/processed/sinan/sinan.parquet --start_date 2020-01-01 --end_date 2023-12-31
