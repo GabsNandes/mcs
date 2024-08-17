@@ -39,7 +39,27 @@ def build_dataset(sinan_path, cnes_path, inmet_path, lst_path, rrqpe_path, outpu
 
     # Filtrar sinan_df para considerar apenas ID_UNIDADE '2296306'
     #logging.info("Filtrando sinan_df para ID_UNIDADE '2296306'...")
-    #sinan_df = sinan_df[sinan_df['ID_UNIDADE'] == '2296306']
+    sinan_df = sinan_df[sinan_df['ID_UNIDADE'].isin([
+                        '7427549',
+                        '2268922',
+                        '7149328',
+                        '2299216',
+                        '0106453',
+                        '6870066',
+                        '6042619',
+                        '2288893',
+                        '5106702',
+                        '6635148',
+                        '2269481',
+                        '2708353',
+                        '7591136',
+                        '2283395',
+                        '2287579',
+                        '2291533',
+                        '2292386',
+                        '0012505',
+                        '2292084',
+                        '6518893'])]
     #logging.debug(f"sinan_df shape after filtering: {sinan_df.shape}")
 
     # Processar sinan_df
