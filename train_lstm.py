@@ -1,3 +1,4 @@
+import keras
 import pandas as pd
 import numpy as np
 import os
@@ -7,33 +8,39 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Input
+from tensorflow.keras.layers import LSTM, Dense, Input, Activation
 from tensorflow.keras.optimizers import Adam
-import shap
+#import shap
 import argparse
 
+keras.utils.set_random_seed(802)
+tf.config.experimental.enable_op_determinism()
+
 # Função para construir, treinar e visualizar modelos LSTM
-def train_and_visualize_lstm(X_train, y_train, X_test, y_test, unit_id, features, model_name, output_path, performance_metrics):
+def train_and_visualize_lstm(X_train, y_train, X_test, y_test, X_val, y_val, unit_id, features, model_name, output_path, performance_metrics):
     # Escalar os dados
     scaler = MinMaxScaler()
     X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)    
     X_test_scaled = scaler.transform(X_test)
 
     # Redimensionar os dados para LSTM [samples, timesteps, features]
     timesteps = 1
     X_train_lstm = X_train_scaled.reshape((X_train_scaled.shape[0], timesteps, X_train_scaled.shape[1]))
+    X_val_lstm = X_val_scaled.reshape((X_val_scaled.shape[0], timesteps, X_val_scaled.shape[1]))
     X_test_lstm = X_test_scaled.reshape((X_test_scaled.shape[0], timesteps, X_test_scaled.shape[1]))
 
     # Construir o modelo LSTM
     model_lstm = Sequential([
         Input(shape=(timesteps, X_train_scaled.shape[1])),
-        LSTM(50),
-        Dense(1)
+        LSTM(50, activation='tanh'),
+        Activation('relu'),
+        Dense(1, activation='relu')
     ])
     model_lstm.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
 
     # Treinar o modelo LSTM
-    history_lstm = model_lstm.fit(X_train_lstm, y_train, epochs=20, batch_size=32, validation_data=(X_test_lstm, y_test))
+    history_lstm = model_lstm.fit(X_train_lstm, y_train, epochs=100, batch_size=32, validation_data=(X_val_lstm, y_val), shuffle=True)
 
     # Previsões e avaliação do modelo LSTM
     y_pred_lstm = model_lstm.predict(X_test_lstm)
@@ -91,8 +98,6 @@ def train(dataset_path, output_path, split_date, id_unidade):
     if id_unidade:
         df = df[df["ID_UNIDADE"] == id_unidade]
 
-    df.to_csv("teste.csv")        
-
     # Selecionar as features e a variável alvo
     features_cases = [
         'CASES', 'CASES_MM_14', 'CASES_MM_21', 'CASES_ACC_14', 'CASES_ACC_21'
@@ -138,55 +143,40 @@ def train(dataset_path, output_path, split_date, id_unidade):
         group = group.sort_values(by='DT_NOTIFIC')
         
         # Dividir os dados em conjuntos de treino e teste
-        train_df = group[group['DT_NOTIFIC'] <= split_date]
-        test_df = group[group['DT_NOTIFIC'] > split_date]
+        split_date_1 = '2021-12-31'
+        split_date_2 = '2022-06-01'
+
+        train_df = group[group['DT_NOTIFIC'] <= split_date_1]
+        val_df = group[(group['DT_NOTIFIC'] > split_date_1) & (group['DT_NOTIFIC'] <= split_date_2)]
+        test_df = group[group['DT_NOTIFIC'] > split_date_2]
 
         X_train_all_features = train_df[all_features].values
         y_train = train_df[target].values
+
+        X_val_all_features = val_df[all_features].values
+        y_val = val_df[target].values
+
         X_test_all_features = test_df[all_features].values
         y_test = test_df[target].values
 
         # Treinar e avaliar os modelos LSTM com todas as features
-        train_and_visualize_lstm(X_train_all_features, y_train, X_test_all_features, y_test, name, all_features, "all_features", output_path, performance_metrics)
+        train_and_visualize_lstm(X_train_all_features, y_train, X_test_all_features, y_test, X_val_all_features, y_val, name, all_features, "all_features", output_path, performance_metrics)
 
         # Treinar e avaliar os modelos LSTM sem features climáticas
         X_train_inmet_and_cases = train_df[inmet_and_cases].values
+        X_val_inmet_and_cases = val_df[inmet_and_cases].values
         X_test_inmet_and_cases = test_df[inmet_and_cases].values
-        train_and_visualize_lstm(X_train_inmet_and_cases, y_train, X_test_inmet_and_cases, y_test, name, inmet_and_cases, "inmet_features", output_path, performance_metrics)
+        train_and_visualize_lstm(X_train_inmet_and_cases, y_train, X_test_inmet_and_cases, y_test, X_val_inmet_and_cases, y_val, name, inmet_and_cases, "inmet_features", output_path, performance_metrics)
 
         X_train_sat_and_cases = train_df[sat_and_cases].values
+        X_val_sat_and_cases = val_df[sat_and_cases].values
         X_test_sat_and_cases = test_df[sat_and_cases].values
-        train_and_visualize_lstm(X_train_sat_and_cases, y_train, X_test_sat_and_cases, y_test, name, sat_and_cases, "sat_features", output_path, performance_metrics)                
+        train_and_visualize_lstm(X_train_sat_and_cases, y_train, X_test_sat_and_cases, y_test, X_val_sat_and_cases, y_val, name, sat_and_cases, "sat_features", output_path, performance_metrics)                
 
-        features_without_climate = features_cases
-        X_train_no_climate = train_df[features_without_climate].values
-        X_test_no_climate = test_df[features_without_climate].values
-        train_and_visualize_lstm(X_train_no_climate, y_train, X_test_no_climate, y_test, name, features_without_climate, "no_climate_features", output_path, performance_metrics)
-
-    train_df = df[df['DT_NOTIFIC'] <= split_date]
-    test_df = df[df['DT_NOTIFIC'] > split_date]        
-
-    X_train_all_features = train_df[all_features].values
-    y_train = train_df[target].values
-    X_test_all_features = test_df[all_features].values
-    y_test = test_df[target].values
-
-    # Treinar e avaliar os modelos LSTM com todas as features
-    train_and_visualize_lstm(X_train_all_features, y_train, X_test_all_features, y_test, "all", all_features, "all_features", output_path, performance_metrics)
-
-    # Treinar e avaliar os modelos LSTM sem features climáticas
-    X_train_inmet_and_cases = train_df[inmet_and_cases].values
-    X_test_inmet_and_cases = test_df[inmet_and_cases].values
-    train_and_visualize_lstm(X_train_inmet_and_cases, y_train, X_test_inmet_and_cases, y_test, "all", inmet_and_cases, "inmet_features", output_path, performance_metrics)
-
-    X_train_sat_and_cases = train_df[sat_and_cases].values
-    X_test_sat_and_cases = test_df[sat_and_cases].values
-    train_and_visualize_lstm(X_train_sat_and_cases, y_train, X_test_sat_and_cases, y_test, "all", sat_and_cases, "sat_features", output_path, performance_metrics)                
-
-    features_without_climate = features_cases
-    X_train_no_climate = train_df[features_without_climate].values
-    X_test_no_climate = test_df[features_without_climate].values
-    train_and_visualize_lstm(X_train_no_climate, y_train, X_test_no_climate, y_test, "all", features_without_climate, "no_climate_features", output_path, performance_metrics)    
+        X_train_no_climate = train_df[features_cases].values
+        X_val_no_climate = val_df[features_cases].values
+        X_test_no_climate = test_df[features_cases].values
+        train_and_visualize_lstm(X_train_no_climate, y_train, X_test_no_climate, y_test, X_val_no_climate, y_val, name, features_cases, "no_climate_features", output_path, performance_metrics)
 
     # Salvar métricas de desempenho em um arquivo CSV
     performance_metrics.to_csv(os.path.join(output_path, 'lstm_performance_metrics.csv'), index=False)
@@ -206,10 +196,10 @@ def main():
     train(args.dataset_path, args.output_path, args.split_date, args.id_unidade)
 
 if __name__ == '__main__':
-    main()
-    #train(
-    #    dataset_path="data/processed/sinan/sinan.parquet",
-    #    output_path="data/processed/lstm",
-    #    split_date="2022-12-31",
-    #    id_unidade="2296306",
-    #)
+    #main()
+    train(
+        dataset_path="data/processed/sinan/sinan.parquet",
+        output_path="data/processed/lstm",
+        split_date="2022-12-31",
+        id_unidade=None,
+    )
