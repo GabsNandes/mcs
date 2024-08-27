@@ -43,6 +43,14 @@ class BaseModel:
         # Step 3: Predict and evaluate
         y_pred = self.predict(X_test_prepared)
         y_pred_rounded = np.round(np.maximum(y_pred, 0)).astype(int)  # Ensure results are positive or zero
+
+        # Debugging: Check shapes before computing loss
+        logging.debug(f"Shape of y_test: {y_test.shape}, Shape of y_pred_rounded: {y_pred_rounded.shape}")
+
+        # Make sure the shapes match
+        if y_pred_rounded.shape != y_test.shape:
+            raise ValueError(f"Shape mismatch: y_test shape {y_test.shape}, y_pred_rounded shape {y_pred_rounded.shape}")
+
         loss = mean_squared_error(y_test, y_pred_rounded)
 
         # Step 4: Log and return results
@@ -58,9 +66,9 @@ class BaseModel:
         logging.info(f'{self.name} with {feature_set_name} Test MSE: {loss}')
         return y_pred_rounded, loss, history
 
-# LSTM model class
-class LSTMModel(BaseModel):
-    def __init__(self, input_shape, name="LSTM_Model"):
+# LSTM model class (Keras version)
+class LSTM_KerasModel(BaseModel):
+    def __init__(self, input_shape, name="LSTM_KerasModel"):
         super().__init__(name)
         self.model = Sequential([
             Input(shape=input_shape),
@@ -117,7 +125,8 @@ class XGBoostModel(BaseModel):
 
     def train(self, X_train, y_train, X_val, y_val):
         eval_set = [(X_train, y_train), (X_val, y_val)]
-        self.model.fit(X_train, y_train, eval_metric="rmse", eval_set=eval_set, verbose=True)
+        self.model.set_params(early_stopping_rounds=10)  # Set early stopping here
+        self.model.fit(X_train, y_train, eval_set=eval_set, verbose=True)
         return self.model.evals_result()
 
     def predict(self, X_test):
@@ -198,12 +207,12 @@ def train(dataset_path, output_path, train_cutoff, val_cutoff, model_type, id_un
     performance_metrics = pd.DataFrame(columns=['ID_UNIDADE', 'Model', 'Feature_Set', 'MSE', 'Total_Cases_Train', 'Estimated_Cases_Test', 'Actual_Cases_Test'])
 
     # Select model based on the model_type argument
-    if model_type == "LSTM":
-        model_class = LSTMModel
+    if model_type == "LSTM_KERAS":
+        model_class = LSTM_KerasModel
     elif model_type == "XGBoost":
         model_class = XGBoostModel
     else:
-        raise ValueError(f"Unknown model type: {model_type}. Please choose either 'LSTM' or 'XGBoost'.")
+        raise ValueError(f"Unknown model type: {model_type}. Please choose either 'LSTM_KERAS' or 'XGBoost'.")
 
     # Iterate over each group of ID_UNIDADE
     for name, group in grouped:
@@ -224,8 +233,11 @@ def train(dataset_path, output_path, train_cutoff, val_cutoff, model_type, id_un
             X_test = test_df[feature_set].values
             y_test = test_df[target].values
 
-            # Instantiate the model
-            model = model_class(input_shape=(1, len(feature_set)))
+            # Instantiate the model (for LSTM_KERAS and LSTM_PYTORCH we need to specify input shape/size)
+            if model_type == "LSTM_KERAS":
+                model = model_class(input_shape=(1, len(feature_set)))
+            elif model_type == "XGBoost":
+                model = model_class()
 
             # Train and evaluate the model
             y_pred_rounded, loss, history = model.train_and_evaluate(X_train, y_train, X_val, y_val, X_test, y_test, output_path, name, feature_set_name)
@@ -245,7 +257,7 @@ def main():
     parser.add_argument("output_path", help="Path to the output")
     parser.add_argument("train_cutoff", help="Date to split train/validation (YYYY-MM-DD)")
     parser.add_argument("val_cutoff", help="Date to split validation/test (YYYY-MM-DD)")
-    parser.add_argument("model_type", choices=["LSTM", "XGBoost"], help="Type of model to train ('LSTM' or 'XGBoost')")
+    parser.add_argument("model_type", choices=["LSTM_KERAS", "XGBoost"], help="Type of model to train ('LSTM_KERAS' or 'XGBoost')")
     parser.add_argument("--id_unidade", dest="id_unidade", default=None, help="Filter by ID_UNIDADE")
     parser.add_argument("--log", dest="log_level", choices=["INFO", "DEBUG", "ERROR"], default="INFO", help="Set the logging level")
 
@@ -256,12 +268,12 @@ def main():
     train(args.dataset_path, args.output_path, args.train_cutoff, args.val_cutoff, args.model_type, args.id_unidade)
 
 if __name__ == '__main__':
-    #main()
-    train(
-        dataset_path="data/processed/sinan/sinan.parquet",
-        output_path="data/processed/lstm",
-        train_cutoff="2021-12-31",
-        val_cutoff="2022-12-31",
-        model_type="LSTM",
-        id_unidade=None
-    )
+    main()
+    #train(
+    #    dataset_path="data/processed/sinan/sinan.parquet",
+    #    output_path="data/processed/lstm",
+    #    train_cutoff="2021-12-31",
+    #    val_cutoff="2022-12-31",
+    #    model_type="XGBoost",
+    #    id_unidade=None
+    #)
