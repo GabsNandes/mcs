@@ -144,8 +144,65 @@ O pytorch teve resultados melhores, e com base na pesquisa que eu fiz, isso era 
 - Sendo assim, a análise com base nas features de clima potencialmente oferece um resultado mais realista e balanceado.
 
 
+## As modificações 
+
+# Original
+```ruby
+# Construir o modelo LSTM
+    model_lstm = Sequential([
+        Input(shape=(timesteps, X_train_scaled.shape[1])),
+        LSTM(50, activation='tanh'),
+        Activation('relu'),
+        Dense(1, activation='relu')
+    ])
+    model_lstm.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
+
+    # Treinar o modelo LSTM
+    history_lstm = model_lstm.fit(X_train_lstm, y_train, epochs=100, batch_size=32, validation_data=(X_val_lstm, y_val), shuffle=True)
+```
+
+# Pytorch
+```ruby
+# Construir o modelo LSTM
+
+    model = LSTMModel(input_size=X_train_scaled.shape[1])
+    criterion = torch.nn.MSELoss()
 
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # Treinar o modelo LSTM
+    num_epochs = 100
+    train_losses = []
+    val_losses = []
+
+    for epoch in range(num_epochs):
+        model.train()
+        epoch_loss = 0
+        for batch_X, batch_y in train_loader:
+            optimizer.zero_grad()
+            outputs = model(batch_X)
+            print("Outputs ", outputs)
+            loss = criterion(outputs, batch_y)
+            print("Losses ", loss)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item() * batch_X.size(0)
+            print("Epochs ", epoch ,"/", num_epochs)
+        train_losses.append(epoch_loss / len(train_loader.dataset))
+
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch_X, batch_y in val_loader:
+                outputs = model(batch_X)
+                loss = criterion(outputs, batch_y)
+                val_loss += loss.item() * batch_X.size(0)
+        val_losses.append(val_loss / len(val_loader.dataset))
+
+        logging.info(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_losses[-1]:.4f}, Val Loss: {val_losses[-1]:.4f}')
+
+```
 
 
 
