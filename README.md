@@ -95,15 +95,15 @@ No eixo X temos os códigos de ID, e no eixo Y temos os casos totais, podemos ve
 
 No final do treinamento obtemos um CSV e uma série de gráficos que demonstram os resultados do treinamento. Nesse CSV podemos analisar o comportamento do modelo, e formular uma conclusão:
 
+![Alt text](imagesToReadMe/kerascsv.png "Test")
+
 - Com poucos casos de dengue para treino e estimativa, o modelo não consegue fazer uma estimativa de boa qualidade
 
 - O modelo se comporta melhor com mais casos de dengue para treinar e estimar
 
 - Analisando os gráficos, a análise com piores resultados foi a de isolar inmet_features e sat_features, tendo os maiores MSEs. E um outro problema, no_climate_features embora acerte consideravelmente em certas áreas, vendo os gráficos e resultados da tabela, a realidade é que isso se trata de um caso de overfitting. Isso fica bem visível aqui:
 
-
-![Alt text](relative%20path/to/img.jpg?raw=true "Title")
-	
+![Alt text](imagesToReadMe/keras.png "Test")
 
 Portanto, usar as features de clima se apresenta como a melhor abordagem.
 
@@ -126,15 +126,18 @@ Agora para as modificações feitas usando o pytorch, ambos vão usar o LSTM
 
 O comportamento do modelo:
 
+![Alt text](imagesToReadMe/pytorchcomp.png "Test")
+
 
 O pytorch teve resultados melhores, e com base na pesquisa que eu fiz, isso era esperado. Entretanto, o pytorch possui um grau de complexidade maior de aplicação, menor legibilidade e poderia ser mais difícil para continuar o projeto.
 
+![Alt text](imagesToReadMe/pytorchcsv.png "Test")
 
 - Os comportamentos relativos à quantidade de exemplos são diferentes entre keras e pytorch, pytorch foi capaz de acertar com menos exemplos, algo que não foi possível no keras. Vale ressaltar que o conjunto de treino deve ter um valor próximo de uma estimativa, então trabalhar com conjuntos de treinos pequenos não é o ideal.
 
 - No pytorch temos uma visão mais clara de qual é o método de análise menos eficiente, o sat_features, mas a questão de overfitting possivelmente está ocorrendo de novo.
 
-
+![Alt text](imagesToReadMe/pytorch.png "Test")
 
 
 
