@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/content/drive/MyDrive/ML/mcs/src/')
 from utils.download_goes_prod import download_goes_prod
 import numpy as np
 import logging
