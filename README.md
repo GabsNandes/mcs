@@ -86,7 +86,7 @@ O código original foi escrito usando keras para fazer um modelo de LSTM.
 
 Aqui nós podemos ver como os casos se comportam versus os resultados obtidos pelos modelos:
 
-![Alt text](imagesToReadMe\kerascomp.png "Test")
+![Alt text](imagesToReadMe/kerascomp.png "Test")
 
 
 No eixo X temos os códigos de ID, e no eixo Y temos os casos totais, podemos ver como o modelo se comportou.
