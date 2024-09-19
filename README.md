@@ -1,101 +1,159 @@
 
-# mcs
-Climate Change on Health
 
-## About
-Soon
 
-## Features
-Soon
+## Introdução
 
-## Installation
-```bash
-conda env create -f arboseer.yml
-conda activate arboseer
-```
+Esse foi um estudo baseado no repositório MCS criado pelo aluno de mestrado Ramon Garcia que visa estabelecer um modelo capaz de estimar casos de dengue com base em um conjunto de dados meteorológicos. Para isso, são usados dados de cinco instituições brasileiras.
 
-## Building the dataset
-The dataset used to train the LSTM model is composed of:
-- CNES - Dataset of Health Units
-- SINAN - Dataset of Dengue Cases
-- INMET - Dataset of INMET weather measurements
-- LST - Dataset of GOES-16 Land Surface Temperature
-- RRQPE - Dataset of GOES-16 Rainfal Rate
+CNES - Dados de unidades de saúde no Brasil
 
-The full script for building the dataset can be found in the file build_dataset.sh/bat.
+SINAN - Dados de casos de dengue no Brasil
 
-Note that raw files aren't removed after processing.
+INMET - Dados do tempo no Brasil
 
-### Download and process CNES Health Units data 
-In this step, we'll download the latest CNES data, convert it to parquet and add the lat/lon values for the addresses.
+LST - Dados de temperatura do chão no Brasil
 
-The first script downloads the data.
-```bash
-python src/utils/download_cnes_file.py FILETYPE UF DATE DEST_PATH/FILENAME.dbc
-```
+RRQPE - Dados de chuvas no Brasil
 
-The next one converts it from dbc to parquet.
-```bash
-python src/utils/dbc_to_parquet.py INPUT_PATH OUTPUT_PATH
-```
+A utilidade do estudo é evidente, pois as prefeituras podem estabelecer diferentes protocolos em hospitais e postos de saúde caso certos aspectos de temperatura, chuva sejam observados. Ou podem realizar determinadas campanhas de limpeza ou conscientização de maneira mais efetiva.
 
-The final script adds the lat/lon values and trims the dataset fields.
-```bash
-python src/process_cnes_dataset.py INPUT_PATH OUTPUT_PATH
-```
+Devido a problemas que eu tive com o processamento, e alguns dados estavam bloqueados por Tokens de API, eu não consegui baixar e processar os dados seguindo o que foi fornecido no GIT, portanto, precisei pegar esses dados diretamente do Ramon.
 
-Upon finishing this step we should have the final CNES parquet.
 
-### Download and process SINAN dengue cases
-In this step, we'll download the cases using PySus and extract the SINAN cases. PySus only works on Linux. The files can also be acquired on the SINAN website.
 
-First, we'll download the file for every disease and year.
-```bash
-python src/utils/download_sinan_file.py FILETYPE YEAR OUTPUT_PATH
-```
 
-Then, we'll merge the files into a single dataset. As of now, the dataset has a fixed name: concat.parquet
-```bash
-python src/unify_sinan.py INPUT_PATH OUTPUT_PATH
-```
 
-Finally, we'll extract the cases we want, trimming the dataset fields in the process. Here we have the option to filter by UF (with --cod_uf: RJ is 33, SP is 35 and so on) or CNES (with --cnes_id). We also can fill the dataset, inserting rows with 0 cases on the dates that aren't present on the dataset.
-```bash
-python src/extract_sinan_cases.py INPUT_PATH OUTPUT PATH --cod_uf COD_UF --filled --start_date YYYY-MM-DD --end_date YYYY-MM-DD
-```
 
-### Download INMET data    
-In this step, we'll download and unify the INMET data. You'll need an INMET API token to make requests.
-```bash
-python src/utils/download_inmet_data.py -s STATION -b YYYY -e YYYY -o OUTPUT_PATH --api_token INMET_API_TOKEN
-```
 
-### Concat INMET data
-With the INMET data downloaded, we'll unify all the files into a single dataset. We can also use --aggregated True to aggregate the values from an hourly basis to a daily basis.
-```bash
-python src/unify_inmet.py INPUT_PATH OUTPUT_PATH --aggregated True
-```
 
-### Calculate LST
-In this step, we'll be downloading LST data and converting it into a single dataset. Right now we're using a fixed extent around Rio de Janeiro and a fixed output file name lst.parquet. In this process, we also aggregate measurements from hourly to daily creating the MIN, MAX, and AVG of each temperature.
-```bash
-python src/calculate_min_max_avg_lst.py YYYYMMDD YYYYMMDD DOWNLOAD_PATH OUTPUT_PATH
-```
 
-### Download and Calculate RRQPE
-In this step, we'll be downloading RRQPE data and converting it into a single dataset. Right now we're using a fixed extent around Rio de Janeiro and a fixed output file name rrqpe.parquet. In this process, we also aggregate measurements from hourly to daily creating the SUM of the hourly rainfall rate.
-```bash
-python src/calculate_accumulated_rrqpe.py YYYYMMDD YYYYMMDD DOWNLOAD_PATH OUTPUT_PATH
-```
 
-### Build
-Finally, we'll combine all the data into a single dataset.
-```bash
-python src/build_dataset.py DENG_DATASET CNES_DATASET INMET_DATASET LST_DATASET RRQPE_DATASET OUTPUTDATASET --start_date YYYY-MM-DD --end_date YYYY-MM-DD
-```
 
-## Train the LSTM model
-To train the LSTM model, we simply call the train script passing the path to the built dataset, the output path (for figures and etc), and the date which will be used to split the data into test/train.
-```bash
-python src/train_lstm.py INPUT_PATH OUTPUT_PATH YYYY-MM-DD
-```
+
+
+
+
+
+
+
+## Comparativo de modelos
+
+Analisando o código de construção do dataset, podemos ver que ele é feito com base nas IDs de unidade do sinan, os casos são de 2019 a 2023.
+
+Cada ID é analisado de quatro maneiras diferentes
+
+all_features = com todas as features de clima (chuva, temperatura e tempo)
+
+inmet = análise somente com o inmet
+
+sat = análise somente com o sat
+
+no_climate_features = nenhuma feature de tempo analisada 
+
+
+sinan_df = sinan_df[sinan_df['ID_UNIDADE'].isin([
+                        '7427549',
+                        '2268922',
+                        '7149328',
+                        '2299216',
+                        '0106453',
+                        '6870066',
+                        '6042619',
+                        '2288893',
+                        '5106702',
+                        '6635148',
+                        '2269481',
+                        '2708353',
+                        '7591136',
+                        '2283395',
+                        '2287579',
+                        '2291533',
+                        '2292386',
+                        '0012505',
+                        '2292084',
+                        '6518893'])]
+
+
+
+
+
+
+
+
+## Keras
+
+O código original foi escrito usando keras para fazer um modelo de LSTM.
+
+Aqui nós podemos ver como os casos se comportam versus os resultados obtidos pelos modelos:
+
+
+No eixo X temos os códigos de ID, e no eixo Y temos os casos totais, podemos ver como o modelo se comportou.
+
+
+
+No final do treinamento obtemos um CSV e uma série de gráficos que demonstram os resultados do treinamento. Nesse CSV podemos analisar o comportamento do modelo, e formular uma conclusão:
+
+- Com poucos casos de dengue para treino e estimativa, o modelo não consegue fazer uma estimativa de boa qualidade
+
+- O modelo se comporta melhor com mais casos de dengue para treinar e estimar
+
+- Analisando os gráficos, a análise com piores resultados foi a de isolar inmet_features e sat_features, tendo os maiores MSEs. E um outro problema, no_climate_features embora acerte consideravelmente em certas áreas, vendo os gráficos e resultados da tabela, a realidade é que isso se trata de um caso de overfitting. Isso fica bem visível aqui:
+
+	
+
+Portanto, usar as features de clima se apresenta como a melhor abordagem.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Pytorch
+
+Agora para as modificações feitas usando o pytorch, ambos vão usar o LSTM
+
+O comportamento do modelo:
+
+
+O pytorch teve resultados melhores, e com base na pesquisa que eu fiz, isso era esperado. Entretanto, o pytorch possui um grau de complexidade maior de aplicação, menor legibilidade e poderia ser mais difícil para continuar o projeto.
+
+
+- Os comportamentos relativos à quantidade de exemplos são diferentes entre keras e pytorch, pytorch foi capaz de acertar com menos exemplos, algo que não foi possível no keras. Vale ressaltar que o conjunto de treino deve ter um valor próximo de uma estimativa, então trabalhar com conjuntos de treinos pequenos não é o ideal.
+
+- No pytorch temos uma visão mais clara de qual é o método de análise menos eficiente, o sat_features, mas a questão de overfitting possivelmente está ocorrendo de novo.
+
+
+
+
+
+- Sendo assim, a análise com base nas features de clima potencialmente oferece um resultado mais realista e balanceado.
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Drive com dados coletados:
+
+https://drive.google.com/drive/folders/1e3zeKsxuHYebvFtvQlt4CLvunRGld3Zf?usp=drive_link
+
+
+
+
+
+

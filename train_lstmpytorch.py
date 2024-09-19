@@ -84,10 +84,13 @@ def train_and_visualize_lstm(X_train, y_train, X_test, y_test, X_val, y_val, uni
         for batch_X, batch_y in train_loader:
             optimizer.zero_grad()
             outputs = model(batch_X)
+            print("Outputs ", outputs)
             loss = criterion(outputs, batch_y)
+            print("Losses ", loss)
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item() * batch_X.size(0)
+            print("Epochs ", epoch ,"/", num_epochs)
         train_losses.append(epoch_loss / len(train_loader.dataset))
 
         model.eval()
