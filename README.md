@@ -86,6 +86,8 @@ O código original foi escrito usando keras para fazer um modelo de LSTM.
 
 Aqui nós podemos ver como os casos se comportam versus os resultados obtidos pelos modelos:
 
+![Alt text](imagesToReadMe\kerascomp.png "Test")
+
 
 No eixo X temos os códigos de ID, e no eixo Y temos os casos totais, podemos ver como o modelo se comportou.
 
@@ -99,6 +101,8 @@ No final do treinamento obtemos um CSV e uma série de gráficos que demonstram 
 
 - Analisando os gráficos, a análise com piores resultados foi a de isolar inmet_features e sat_features, tendo os maiores MSEs. E um outro problema, no_climate_features embora acerte consideravelmente em certas áreas, vendo os gráficos e resultados da tabela, a realidade é que isso se trata de um caso de overfitting. Isso fica bem visível aqui:
 
+
+![Alt text](relative%20path/to/img.jpg?raw=true "Title")
 	
 
 Portanto, usar as features de clima se apresenta como a melhor abordagem.
